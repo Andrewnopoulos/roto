@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rota Game</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-container">
+        <h1>Rota Game</h1>
+        <div class="game-info">
+            <div>Current Player: <span id="current-player">Player 1</span></div>
+            <div>Phase: <span id="game-phase">Placement</span></div>
+            <div>Remaining Pieces: <span id="remaining-pieces">3</span></div>
+        </div>
+        
+        <div class="board-container">
+            <svg width="400" height="400" class="board">
+                <!-- Outer circle positions (0-7) -->
+                <circle cx="200" cy="50" r="20" class="cell" data-position="0"></circle>
+                <circle cx="328" cy="100" r="20" class="cell" data-position="1"></circle>
+                <circle cx="350" cy="200" r="20" class="cell" data-position="2"></circle>
+                <circle cx="328" cy="300" r="20" class="cell" data-position="3"></circle>
+                <circle cx="200" cy="350" r="20" class="cell" data-position="4"></circle>
+                <circle cx="72" cy="300" r="20" class="cell" data-position="5"></circle>
+                <circle cx="50" cy="200" r="20" class="cell" data-position="6"></circle>
+                <circle cx="72" cy="100" r="20" class="cell" data-position="7"></circle>
+                
+                <!-- Center position (8) -->
+                <circle cx="200" cy="200" r="20" class="cell center" data-position="8"></circle>
+                
+                <!-- Board lines -->
+                <g class="board-lines">
+                    <!-- Outer circle -->
+                    <circle cx="200" cy="200" r="150" fill="none" stroke="#333" stroke-width="2"></circle>
+                    
+                    <!-- Diameter lines -->
+                    <line x1="200" y1="50" x2="200" y2="350" stroke="#333" stroke-width="2"></line>
+                    <line x1="50" y1="200" x2="350" y2="200" stroke="#333" stroke-width="2"></line>
+                    <line x1="72" y1="100" x2="328" y2="300" stroke="#333" stroke-width="2"></line>
+                    <line x1="328" y1="100" x2="72" y2="300" stroke="#333" stroke-width="2"></line>
+                </g>
+            </svg>
+        </div>
+        
+        <div class="controls">
+            <button id="reset-btn">Reset Game</button>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
