@@ -3,52 +3,622 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rota Game</title>
+    <title>Rota Game - Multiplayer</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- Connection Status Bar -->
+    <div id="connection-status" class="connection-status">
+        <span id="connection-indicator" class="status-indicator offline"></span>
+        <span id="connection-text">Connecting...</span>
+    </div>
+
+    <!-- Main Game Container -->
     <div class="game-container">
-        <h1>Rota Game</h1>
-        <div class="game-info">
-            <div>Current Player: <span id="current-player">Player 1</span></div>
-            <div>Phase: <span id="game-phase">Placement</span></div>
-            <div>Remaining Pieces: <span id="remaining-pieces">3</span></div>
-        </div>
+        <h1>Rota Game - Multiplayer</h1>
         
-        <div class="board-container">
-            <svg width="400" height="400" class="board">
-                <!-- Outer circle positions (0-7) -->
-                <circle cx="200" cy="50" r="20" class="cell" data-position="0"></circle>
-                <circle cx="328" cy="100" r="20" class="cell" data-position="1"></circle>
-                <circle cx="350" cy="200" r="20" class="cell" data-position="2"></circle>
-                <circle cx="328" cy="300" r="20" class="cell" data-position="3"></circle>
-                <circle cx="200" cy="350" r="20" class="cell" data-position="4"></circle>
-                <circle cx="72" cy="300" r="20" class="cell" data-position="5"></circle>
-                <circle cx="50" cy="200" r="20" class="cell" data-position="6"></circle>
-                <circle cx="72" cy="100" r="20" class="cell" data-position="7"></circle>
+        <!-- Lobby Interface (Initially visible) -->
+        <div id="lobby-interface" class="lobby-interface">
+            <!-- Player Profile Summary -->
+            <div class="profile-summary" id="profile-summary" style="display: none;">
+                <div class="profile-header">
+                    <div class="player-avatar">
+                        <div class="avatar-circle" id="player-avatar">👤</div>
+                        <div class="tier-badge" id="player-tier">BRONZE</div>
+                    </div>
+                    <div class="player-info">
+                        <h3 id="profile-username">Player</h3>
+                        <div class="rating-display">
+                            <span class="rating-value" id="player-rating">1200</span>
+                            <span class="rating-label">Rating</span>
+                        </div>
+                    </div>
+                    <button id="view-profile-btn" class="profile-btn">View Profile</button>
+                </div>
+                <div class="quick-stats">
+                    <div class="stat-item">
+                        <span class="stat-value" id="games-played">0</span>
+                        <span class="stat-label">Games</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="win-rate">0%</span>
+                        <span class="stat-label">Win Rate</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="current-streak">0</span>
+                        <span class="stat-label">Streak</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Login Section -->
+            <div class="login-section" id="login-section">
+                <h2>Join Game</h2>
+                <div class="input-group">
+                    <input type="text" id="player-name" placeholder="Enter your name" maxlength="20">
+                    <button id="login-btn" class="primary-btn">Login</button>
+                </div>
+                <p class="login-info">Enter your name to access matchmaking and track your progress</p>
+            </div>
+
+            <!-- Navigation Section -->
+            <div class="navigation-section" id="navigation-section" style="display: none;">
+                <div class="nav-buttons">
+                    <button id="matchmaking-nav-btn" class="nav-btn active" data-section="matchmaking">
+                        <span class="nav-icon">🎮</span>
+                        <span class="nav-label">Play</span>
+                    </button>
+                    <button id="leaderboard-nav-btn" class="nav-btn" data-section="leaderboard">
+                        <span class="nav-icon">🏆</span>
+                        <span class="nav-label">Leaderboard</span>
+                    </button>
+                    <button id="profile-nav-btn" class="nav-btn" data-section="profile">
+                        <span class="nav-icon">👤</span>
+                        <span class="nav-label">Profile</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Enhanced Matchmaking Section -->
+            <div class="matchmaking-section" id="matchmaking-section" style="display: none;">
+                <h2>Choose Game Mode</h2>
                 
-                <!-- Center position (8) -->
-                <circle cx="200" cy="200" r="20" class="cell center" data-position="8"></circle>
-                
-                <!-- Board lines -->
-                <g class="board-lines">
-                    <!-- Outer circle -->
-                    <circle cx="200" cy="200" r="150" fill="none" stroke="#333" stroke-width="2"></circle>
+                <!-- Game Mode Selection -->
+                <div class="game-mode-selection">
+                    <div class="mode-card" id="ranked-mode" data-mode="ranked">
+                        <div class="mode-icon">🏆</div>
+                        <h3>Ranked Match</h3>
+                        <p>Competitive play with rating changes</p>
+                        <div class="mode-requirements">
+                            <span id="ranked-requirement">Requires 10+ games</span>
+                        </div>
+                    </div>
+                    <div class="mode-card" id="casual-mode" data-mode="casual">
+                        <div class="mode-icon">🎮</div>
+                        <h3>Casual Match</h3>
+                        <p>Relaxed play without rating impact</p>
+                        <div class="mode-requirements">
+                            <span>No requirements</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Matchmaking Preferences -->
+                <div class="matchmaking-preferences">
+                    <h3>Preferences</h3>
+                    <div class="preference-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="allow-spectators" checked>
+                            <span class="checkmark"></span>
+                            Allow spectators
+                        </label>
+                    </div>
+                </div>
+
+                <button id="find-match-btn" class="primary-btn" disabled>Select Game Mode</button>
+            </div>
+
+            <!-- Comprehensive Leaderboard Section -->
+            <div class="leaderboard-section" id="leaderboard-section" style="display: none;">
+                <div class="leaderboard-header">
+                    <h2>Leaderboards</h2>
+                    <div class="player-rank-display" id="player-rank-display">
+                        <span class="rank-label">Your Rank:</span>
+                        <span class="rank-value" id="current-player-rank">#1,234</span>
+                        <span class="rank-category" id="current-rank-category">Global Rating</span>
+                    </div>
+                </div>
+
+                <!-- Season Information -->
+                <div class="season-info" id="season-info">
+                    <div class="season-header">
+                        <div class="season-title">
+                            <h3 id="current-season-name">Season 3: Winter Championship</h3>
+                            <span class="season-status" id="season-status">Active</span>
+                        </div>
+                        <div class="season-countdown" id="season-countdown">
+                            <span class="countdown-label">Season ends in:</span>
+                            <span class="countdown-timer" id="season-timer">23d 14h 36m</span>
+                        </div>
+                    </div>
+                    <div class="season-progress">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="season-progress-fill" style="width: 65%"></div>
+                        </div>
+                        <span class="progress-text" id="season-progress-text">65% Complete</span>
+                    </div>
+                </div>
+
+                <!-- Leaderboard Tabs -->
+                <div class="leaderboard-tabs">
+                    <button class="tab-btn active" data-category="global_rating">
+                        <span class="tab-icon">⭐</span>
+                        <span class="tab-label">Rating</span>
+                    </button>
+                    <button class="tab-btn" data-category="global_wins">
+                        <span class="tab-icon">🏅</span>
+                        <span class="tab-label">Wins</span>
+                    </button>
+                    <button class="tab-btn" data-category="win_percentage">
+                        <span class="tab-icon">📊</span>
+                        <span class="tab-label">Win Rate</span>
+                    </button>
+                    <button class="tab-btn" data-category="seasonal_rating">
+                        <span class="tab-icon">🏆</span>
+                        <span class="tab-label">Seasonal</span>
+                    </button>
+                </div>
+
+                <!-- Search and Filters -->
+                <div class="leaderboard-controls">
+                    <div class="search-container">
+                        <input type="text" id="player-search" placeholder="Search for player..." class="search-input">
+                        <button id="search-btn" class="search-btn">🔍</button>
+                    </div>
+                    <div class="view-controls">
+                        <button id="find-my-rank-btn" class="control-btn">Find My Rank</button>
+                        <button id="top-players-btn" class="control-btn active">Top 100</button>
+                    </div>
+                </div>
+
+                <!-- Leaderboard Table -->
+                <div class="leaderboard-container">
+                    <div class="leaderboard-table-wrapper">
+                        <table class="leaderboard-table" id="leaderboard-table">
+                            <thead>
+                                <tr>
+                                    <th class="rank-col">Rank</th>
+                                    <th class="player-col">Player</th>
+                                    <th class="rating-col">Rating</th>
+                                    <th class="games-col">Games</th>
+                                    <th class="winrate-col">Win Rate</th>
+                                    <th class="streak-col">Streak</th>
+                                    <th class="change-col">24h Change</th>
+                                </tr>
+                            </thead>
+                            <tbody id="leaderboard-tbody">
+                                <!-- Rows will be populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
                     
-                    <!-- Diameter lines -->
-                    <line x1="200" y1="50" x2="200" y2="350" stroke="#333" stroke-width="2"></line>
-                    <line x1="50" y1="200" x2="350" y2="200" stroke="#333" stroke-width="2"></line>
-                    <line x1="72" y1="100" x2="328" y2="300" stroke="#333" stroke-width="2"></line>
-                    <line x1="328" y1="100" x2="72" y2="300" stroke="#333" stroke-width="2"></line>
-                </g>
-            </svg>
+                    <!-- Loading State -->
+                    <div class="leaderboard-loading" id="leaderboard-loading" style="display: none;">
+                        <div class="loading-spinner"></div>
+                        <span>Loading leaderboard...</span>
+                    </div>
+                    
+                    <!-- Empty State -->
+                    <div class="leaderboard-empty" id="leaderboard-empty" style="display: none;">
+                        <div class="empty-icon">📊</div>
+                        <h3>No players found</h3>
+                        <p>Try adjusting your search or check back later</p>
+                    </div>
+                </div>
+
+                <!-- Pagination -->
+                <div class="leaderboard-pagination" id="leaderboard-pagination">
+                    <button id="prev-page-btn" class="pagination-btn" disabled>Previous</button>
+                    <div class="pagination-info">
+                        <span id="page-info">Page 1 of 10</span>
+                        <span id="total-players">1,234 players</span>
+                    </div>
+                    <button id="next-page-btn" class="pagination-btn">Next</button>
+                </div>
+
+                <!-- Historical Season Winners -->
+                <div class="season-winners" id="season-winners">
+                    <h3>Previous Season Champions</h3>
+                    <div class="winners-grid" id="winners-grid">
+                        <!-- Winners will be populated dynamically -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Queue Status -->
+            <div class="queue-status" id="queue-status" style="display: none;">
+                <div class="queue-header">
+                    <h3>Finding Match...</h3>
+                    <div class="queue-animation">
+                        <div class="pulse-rings">
+                            <div class="pulse-ring"></div>
+                            <div class="pulse-ring"></div>
+                            <div class="pulse-ring"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="queue-info">
+                    <div class="queue-time">
+                        <span class="time-label">Queue Time:</span>
+                        <span id="queue-timer">00:00</span>
+                    </div>
+                    <div class="queue-position">
+                        <span class="position-label">Estimated Wait:</span>
+                        <span id="estimated-wait">~30s</span>
+                    </div>
+                </div>
+                
+                <div class="queue-details">
+                    <div class="queue-mode">
+                        <span id="queue-mode-display">Ranked Match</span>
+                    </div>
+                    <div class="rating-range">
+                        Rating range: <span id="rating-range-display">1150-1250</span>
+                    </div>
+                </div>
+                
+                <div class="queue-actions">
+                    <button id="cancel-queue-btn" class="cancel-btn">Cancel Queue</button>
+                    <button id="queue-suggestions-btn" class="secondary-btn">Suggestions</button>
+                </div>
+            </div>
         </div>
-        
-        <div class="controls">
-            <button id="reset-btn">Reset Game</button>
+
+        <!-- Game Interface (Initially hidden) -->
+        <div id="game-interface" class="game-interface" style="display: none;">
+            <!-- Enhanced Player Information -->
+            <div class="players-info">
+                <div class="player-card enhanced" id="player1-card">
+                    <div class="player-header">
+                        <div class="player-name" id="player1-name">You</div>
+                        <div class="player-tier" id="player1-tier">BRONZE</div>
+                    </div>
+                    <div class="player-rating">
+                        <span class="rating-value" id="player1-rating">1200</span>
+                        <span class="rating-change" id="player1-change" style="display: none;">+15</span>
+                    </div>
+                    <div class="player-color player1-color"></div>
+                    <div class="player-status" id="player1-status">Waiting...</div>
+                </div>
+                <div class="vs-indicator">
+                    <span class="vs-text">VS</span>
+                    <div class="match-type" id="match-type">Ranked</div>
+                </div>
+                <div class="player-card enhanced" id="player2-card">
+                    <div class="player-header">
+                        <div class="player-name" id="player2-name">Opponent</div>
+                        <div class="player-tier" id="player2-tier">BRONZE</div>
+                    </div>
+                    <div class="player-rating">
+                        <span class="rating-value" id="player2-rating">1200</span>
+                        <span class="rating-change" id="player2-change" style="display: none;">-15</span>
+                    </div>
+                    <div class="player-color player2-color"></div>
+                    <div class="player-status" id="player2-status">Waiting...</div>
+                </div>
+            </div>
+
+            <!-- Game Information -->
+            <div class="game-info">
+                <div class="info-item">
+                    <label>Current Turn:</label>
+                    <span id="current-player">Waiting for game...</span>
+                </div>
+                <div class="info-item">
+                    <label>Phase:</label>
+                    <span id="game-phase">Starting...</span>
+                </div>
+                <div class="info-item">
+                    <label>Remaining Pieces:</label>
+                    <span id="remaining-pieces">3</span>
+                </div>
+                <div class="info-item">
+                    <label>Game Status:</label>
+                    <span id="game-status">Waiting for players...</span>
+                </div>
+            </div>
+            
+            <!-- Game Board -->
+            <div class="board-container">
+                <div class="turn-indicator" id="turn-indicator">
+                    <span id="turn-message">Waiting for game to start...</span>
+                </div>
+                
+                <svg width="400" height="400" class="board">
+                    <!-- Outer circle positions (0-7) -->
+                    <circle cx="200" cy="50" r="20" class="cell" data-position="0"></circle>
+                    <circle cx="328" cy="100" r="20" class="cell" data-position="1"></circle>
+                    <circle cx="350" cy="200" r="20" class="cell" data-position="2"></circle>
+                    <circle cx="328" cy="300" r="20" class="cell" data-position="3"></circle>
+                    <circle cx="200" cy="350" r="20" class="cell" data-position="4"></circle>
+                    <circle cx="72" cy="300" r="20" class="cell" data-position="5"></circle>
+                    <circle cx="50" cy="200" r="20" class="cell" data-position="6"></circle>
+                    <circle cx="72" cy="100" r="20" class="cell" data-position="7"></circle>
+                    
+                    <!-- Center position (8) -->
+                    <circle cx="200" cy="200" r="20" class="cell center" data-position="8"></circle>
+                    
+                    <!-- Board lines -->
+                    <g class="board-lines">
+                        <!-- Outer circle -->
+                        <circle cx="200" cy="200" r="150" fill="none" stroke="#333" stroke-width="2"></circle>
+                        
+                        <!-- Diameter lines -->
+                        <line x1="200" y1="50" x2="200" y2="350" stroke="#333" stroke-width="2"></line>
+                        <line x1="50" y1="200" x2="350" y2="200" stroke="#333" stroke-width="2"></line>
+                        <line x1="72" y1="100" x2="328" y2="300" stroke="#333" stroke-width="2"></line>
+                        <line x1="328" y1="100" x2="72" y2="300" stroke="#333" stroke-width="2"></line>
+                    </g>
+                </svg>
+            </div>
+            
+            <!-- Game Controls -->
+            <div class="controls">
+                <button id="forfeit-btn" class="danger-btn">Forfeit Game</button>
+                <button id="leave-game-btn" class="secondary-btn">Leave Game</button>
+            </div>
+        </div>
+
+        <!-- Chat Interface -->
+        <div id="chat-interface" class="chat-interface" style="display: none;">
+            <div class="chat-header">
+                <h3>Chat</h3>
+                <button id="toggle-chat-btn" class="toggle-btn">−</button>
+            </div>
+            <div class="chat-messages" id="chat-messages"></div>
+            <div class="chat-input">
+                <input type="text" id="chat-input" placeholder="Type a message..." maxlength="200">
+                <button id="send-chat-btn">Send</button>
+            </div>
+        </div>
+
+        <!-- Enhanced Game Results Modal -->
+        <div id="game-result-modal" class="modal enhanced-modal" style="display: none;">
+            <div class="modal-content result-modal">
+                <div class="result-header">
+                    <div class="result-icon" id="result-icon">🏆</div>
+                    <h2 id="result-title">Victory!</h2>
+                </div>
+                
+                <div class="result-details">
+                    <p id="result-message">Congratulations! You won the game!</p>
+                    
+                    <!-- Rating Changes -->
+                    <div class="rating-changes" id="rating-changes" style="display: none;">
+                        <h3>Rating & Rank Changes</h3>
+                        <div class="rating-change-display">
+                            <div class="old-rating">
+                                <span class="label">Previous:</span>
+                                <span id="old-rating-value">1200</span>
+                            </div>
+                            <div class="rating-arrow">→</div>
+                            <div class="new-rating">
+                                <span class="label">New:</span>
+                                <span id="new-rating-value">1215</span>
+                            </div>
+                            <div class="rating-change-amount">
+                                <span id="rating-change-text">+15</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Rank Change Display -->
+                        <div class="rank-change-display" id="rank-change-display">
+                            <div class="rank-change-header">
+                                <span class="rank-label">Global Rank</span>
+                                <span class="rank-movement" id="rank-movement">↑ +12</span>
+                            </div>
+                            <div class="rank-values">
+                                <span class="old-rank">#1,234</span>
+                                <span class="rank-arrow">→</span>
+                                <span class="new-rank" id="new-rank-value">#1,222</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Next Rank Progress -->
+                        <div class="next-rank-progress" id="next-rank-progress">
+                            <div class="progress-header">
+                                <span class="progress-label">Progress to next milestone</span>
+                                <span class="progress-target" id="progress-target">Silver Tier</span>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar">
+                                    <div class="progress-fill" id="rank-progress-fill" style="width: 75%"></div>
+                                </div>
+                                <span class="progress-text" id="rank-progress-text">75 / 100 points</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Achievement Unlock -->
+                        <div class="achievement-unlock" id="achievement-unlock" style="display: none;">
+                            <div class="achievement-icon">🏆</div>
+                            <div class="achievement-info">
+                                <h4 id="achievement-name">Climbing Champion</h4>
+                                <p id="achievement-description">Climb 50 ranks in a single session</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Game Statistics -->
+                    <div class="game-statistics">
+                        <h3>Game Statistics</h3>
+                        <div class="stats-grid">
+                            <div class="stat-item">
+                                <span class="stat-label">Game Duration:</span>
+                                <span id="game-duration">5:23</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Moves Made:</span>
+                                <span id="moves-count">12</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Game Type:</span>
+                                <span id="game-type-result">Ranked</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button id="play-again-btn" class="primary-btn">Play Again</button>
+                    <button id="view-leaderboard-result-btn" class="secondary-btn">View Leaderboard</button>
+                    <button id="view-profile-result-btn" class="secondary-btn">View Profile</button>
+                    <button id="back-to-lobby-btn" class="secondary-btn">Back to Lobby</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Player Profile Modal -->
+        <div id="profile-modal" class="modal" style="display: none;">
+            <div class="modal-content profile-modal">
+                <div class="modal-header">
+                    <h2>Player Profile</h2>
+                    <button id="close-profile-btn" class="close-btn">×</button>
+                </div>
+                
+                <div class="profile-content">
+                    <!-- Profile Header -->
+                    <div class="profile-detailed-header">
+                        <div class="profile-avatar-large">
+                            <div class="avatar-circle large" id="profile-avatar-large">👤</div>
+                            <div class="tier-badge large" id="profile-tier-large">BRONZE</div>
+                        </div>
+                        <div class="profile-main-info">
+                            <h3 id="profile-username-large">Player</h3>
+                            <div class="current-rating">
+                                <span class="rating-value large" id="profile-rating-large">1200</span>
+                                <span class="rating-label">Current Rating</span>
+                            </div>
+                            <div class="rank-info">
+                                <span id="global-rank">Rank #1,234</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Statistics Overview -->
+                    <div class="statistics-overview">
+                        <h3>Statistics</h3>
+                        <div class="stats-grid detailed">
+                            <div class="stat-card">
+                                <div class="stat-value" id="profile-games-played">0</div>
+                                <div class="stat-label">Games Played</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="profile-win-rate">0%</div>
+                                <div class="stat-label">Win Rate</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="profile-current-streak">0</div>
+                                <div class="stat-label">Current Streak</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="profile-best-streak">0</div>
+                                <div class="stat-label">Best Streak</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Rating History Chart -->
+                    <div class="rating-history">
+                        <h3>Rating History</h3>
+                        <div class="chart-container" id="rating-chart">
+                            <canvas id="rating-chart-canvas" width="400" height="200"></canvas>
+                        </div>
+                    </div>
+                    
+                    <!-- Recent Matches -->
+                    <div class="recent-matches">
+                        <h3>Recent Matches</h3>
+                        <div class="matches-list" id="recent-matches-list">
+                            <!-- Matches will be populated dynamically -->
+                        </div>
+                    </div>
+                    
+                    <!-- Achievements -->
+                    <div class="achievements">
+                        <h3>Achievements</h3>
+                        <div class="achievements-grid" id="achievements-grid">
+                            <!-- Achievements will be populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Queue Suggestions Modal -->
+        <div id="queue-suggestions-modal" class="modal" style="display: none;">
+            <div class="modal-content suggestions-modal">
+                <div class="modal-header">
+                    <h2>Queue Suggestions</h2>
+                    <button id="close-suggestions-btn" class="close-btn">×</button>
+                </div>
+                
+                <div class="suggestions-content">
+                    <p>Having trouble finding a match? Here are some suggestions:</p>
+                    
+                    <div class="suggestion-item">
+                        <div class="suggestion-icon">🎯</div>
+                        <div class="suggestion-text">
+                            <h4>Try Casual Mode</h4>
+                            <p>Casual matches have shorter wait times and larger player pools</p>
+                        </div>
+                        <button class="suggestion-btn" id="try-casual-btn">Try Casual</button>
+                    </div>
+                    
+                    <div class="suggestion-item">
+                        <div class="suggestion-icon">⏰</div>
+                        <div class="suggestion-text">
+                            <h4>Peak Hours</h4>
+                            <p>More players are online during peak hours (6-10 PM)</p>
+                        </div>
+                    </div>
+                    
+                    <div class="suggestion-item">
+                        <div class="suggestion-icon">🤖</div>
+                        <div class="suggestion-text">
+                            <h4>Practice Mode</h4>
+                            <p>Play against AI while waiting for human opponents</p>
+                        </div>
+                        <button class="suggestion-btn" id="try-practice-btn">Practice</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Messages -->
+    <div id="error-container" class="error-container"></div>
+    
+    <!-- Rank Change Notifications -->
+    <div id="rank-notifications" class="rank-notifications"></div>
+    
+    <!-- Achievement Popup -->
+    <div id="achievement-popup" class="achievement-popup" style="display: none;">
+        <div class="achievement-content">
+            <div class="achievement-animation">
+                <div class="achievement-glow"></div>
+                <div class="achievement-icon-large" id="achievement-popup-icon">🏆</div>
+            </div>
+            <div class="achievement-text">
+                <h3 id="achievement-popup-title">Achievement Unlocked!</h3>
+                <p id="achievement-popup-description">Congratulations on your achievement!</p>
+            </div>
+            <button id="close-achievement-btn" class="close-achievement-btn">×</button>
         </div>
     </div>
     
+    <!-- Include Socket.io client -->
+    <script src="/socket.io/socket.io.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
