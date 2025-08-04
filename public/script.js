@@ -14,6 +14,7 @@ class RotoGame {
         this.bindEvents();
         this.setupSocketListeners();
         this.setupConnectionHandling();
+        this.checkForDirectRoomJoin();
     }
     
     initializeElements() {
@@ -35,6 +36,7 @@ class RotoGame {
         this.currentRoomIdSpan = document.getElementById('currentRoomId');
         this.playerCountSpan = document.getElementById('playerCount');
         this.waitingMessage = document.getElementById('waitingMessage');
+        this.shareRoomBtn = document.getElementById('shareRoom');
         this.startGameBtn = document.getElementById('startGame');
         this.leaveRoomBtn = document.getElementById('leaveRoom');
         
@@ -57,6 +59,7 @@ class RotoGame {
     bindEvents() {
         this.joinRoomBtn.addEventListener('click', () => this.joinRoom());
         this.createRoomBtn.addEventListener('click', () => this.createRoom());
+        this.shareRoomBtn.addEventListener('click', () => this.shareCurrentRoom());
         this.leaveRoomBtn.addEventListener('click', () => this.leaveRoom());
         this.startGameBtn.addEventListener('click', () => this.startGame());
         this.restartGameBtn.addEventListener('click', () => this.restartGame());
@@ -333,6 +336,60 @@ class RotoGame {
         setTimeout(() => {
             notification.remove();
         }, 5000);
+    }
+    
+    // Check if user visited a direct room URL
+    checkForDirectRoomJoin() {
+        const path = window.location.pathname;
+        const roomMatch = path.match(/^\/room\/([A-Za-z0-9]+)$/);
+        
+        if (roomMatch) {
+            const roomId = roomMatch[1];
+            console.log('Direct room join detected:', roomId);
+            
+            // Set the room ID in the input and show a message
+            this.roomIdInput.value = roomId;
+            this.showNotification(`Joining room: ${roomId}`, 'info');
+            
+            // Auto-join the room after a short delay to ensure socket is connected
+            setTimeout(() => {
+                if (this.socket.connected) {
+                    this.socket.emit('join-room', roomId);
+                } else {
+                    // If not connected yet, wait for connection
+                    this.socket.once('connect', () => {
+                        this.socket.emit('join-room', roomId);
+                    });
+                }
+            }, 500);
+        }
+    }
+    
+    // Generate shareable room URL
+    generateRoomUrl(roomId) {
+        const baseUrl = window.location.origin;
+        return `${baseUrl}/room/${roomId}`;
+    }
+    
+    // Copy room URL to clipboard
+    async copyRoomUrl(roomId) {
+        const url = this.generateRoomUrl(roomId);
+        try {
+            await navigator.clipboard.writeText(url);
+            this.showNotification('Room URL copied to clipboard!', 'success');
+        } catch (err) {
+            // Fallback for browsers that don't support clipboard API
+            this.showNotification(`Share this URL: ${url}`, 'info');
+        }
+    }
+    
+    // Share current room URL
+    shareCurrentRoom() {
+        if (this.currentRoom) {
+            this.copyRoomUrl(this.currentRoom);
+        } else {
+            this.showNotification('No active room to share', 'error');
+        }
     }
 }
 

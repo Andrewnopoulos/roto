@@ -47,6 +47,19 @@ app.use(cors({
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json({ limit: '1mb' }));
 
+// Direct room join endpoint
+app.get('/room/:roomId', (req, res) => {
+    const roomId = req.params.roomId;
+    
+    // Validate room ID format
+    if (!roomId || roomId.length > 20 || !/^[a-zA-Z0-9]+$/.test(roomId)) {
+        return res.redirect('/?error=invalid-room');
+    }
+    
+    // Serve the main page but with room ID in URL for client to detect
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 // Game state management
 class GameManager {
     constructor() {

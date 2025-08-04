@@ -183,6 +183,15 @@ button:active {
     background: #da190b;
 }
 
+#shareRoom {
+    background: #ff9800;
+    color: white;
+}
+
+#shareRoom:hover {
+    background: #f57c00;
+}
+
 /* Game Screen */
 .game-header {
     margin-bottom: 20px;
