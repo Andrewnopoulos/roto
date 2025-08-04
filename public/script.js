@@ -8,6 +8,7 @@ class RotoGame {
         this.gamePhase = 'placement';
         this.currentPlayer = 1;
         this.selectedPosition = null;
+        this.gameWinner = null;
         this.connectionStatus = 'connecting';
         
         this.initializeElements();
@@ -124,15 +125,16 @@ class RotoGame {
         this.socket.on('game-started', (data) => {
             this.playerNumber = data.playerNumber;
             this.gameActive = true;
-            this.gamePhase = 'placement';
-            this.currentPlayer = 1;
+            this.gamePhase = data.gamePhase || 'placement';
+            this.currentPlayer = data.currentPlayer || 1;
             this.gameBoard = new Array(9).fill(null);
             this.selectedPosition = null;
             this.showGame();
             this.gameRoomIdSpan.textContent = data.roomId;
-            this.playerRoleSpan.textContent = `Player ${this.playerNumber}`;
             this.updateGameDisplay();
-            this.showNotification('Game started!', 'success');
+            
+            const turnText = this.currentPlayer === this.playerNumber ? 'You go first!' : 'Opponent goes first!';
+            this.showNotification(`Game started! ${turnText}`, 'success');
         });
         
         this.socket.on('move-made', (move) => {
@@ -149,7 +151,10 @@ class RotoGame {
         
         this.socket.on('game-over', (data) => {
             this.gameActive = false;
+            this.gameWinner = data.winner || 'draw'; // Set to 'draw' if no winner
             this.restartGameBtn.style.display = 'inline-block';
+            this.updateGameDisplay(); // Update turn indicator to show game over
+            
             if (data.winner) {
                 const winnerText = data.winner === this.playerNumber ? 'You win!' : 'You lose!';
                 this.showNotification(winnerText, data.winner === this.playerNumber ? 'success' : 'error');
@@ -164,6 +169,7 @@ class RotoGame {
             this.currentPlayer = data.currentPlayer;
             this.gamePhase = data.gamePhase;
             this.selectedPosition = null;
+            this.gameWinner = null;
             this.restartGameBtn.style.display = 'none';
             this.updateGameDisplay();
             this.showGame();
@@ -292,8 +298,26 @@ class RotoGame {
         // Clear previous classes
         this.turnIndicator.className = 'turn-indicator';
         
-        if (!this.gameActive) {
-            // Game not active
+        if (!this.gameActive && this.gameWinner !== null) {
+            // Game over - show result
+            if (this.gameWinner === this.playerNumber) {
+                // You won
+                this.turnIndicator.classList.add('game-won');
+                this.turnMessage.textContent = 'YOU WON! 🎉';
+                this.turnSubtext.textContent = 'Congratulations! Click "Play Again" for another game';
+            } else if (this.gameWinner === 'draw') {
+                // Draw
+                this.turnIndicator.classList.add('game-draw');
+                this.turnMessage.textContent = 'DRAW GAME';
+                this.turnSubtext.textContent = 'Good game! Click "Play Again" to try again';
+            } else {
+                // You lost
+                this.turnIndicator.classList.add('game-lost');
+                this.turnMessage.textContent = 'YOU LOST';
+                this.turnSubtext.textContent = 'Better luck next time! Click "Play Again"';
+            }
+        } else if (!this.gameActive || this.playerNumber === null) {
+            // Game not active or player number not assigned yet
             this.turnIndicator.classList.add('waiting');
             this.turnMessage.textContent = 'Game Not Active';
             this.turnSubtext.textContent = 'Waiting for game to start...';
@@ -321,6 +345,7 @@ class RotoGame {
         this.gameActive = false;
         this.gameBoard = new Array(9).fill(null);
         this.selectedPosition = null;
+        this.gameWinner = null;
         this.restartGameBtn.style.display = 'none';
         this.showLobby();
     }

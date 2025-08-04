@@ -420,7 +420,9 @@ io.on('connection', (socket) => {
                 players.forEach((playerId, index) => {
                     io.to(playerId).emit('game-started', { 
                         playerNumber: index + 1,
-                        roomId: roomId
+                        roomId: roomId,
+                        currentPlayer: result.room.currentPlayer,
+                        gamePhase: result.room.gamePhase
                     });
                 });
                 

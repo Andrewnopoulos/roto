@@ -238,6 +238,38 @@ button:active {
     animation: none;
 }
 
+.turn-indicator.game-won {
+    background: linear-gradient(135deg, #4caf50, #2e7d32);
+    border-color: #1b5e20;
+    box-shadow: 0 4px 20px rgba(76, 175, 80, 0.5);
+    animation: victoryPulse 1.5s infinite;
+}
+
+.turn-indicator.game-lost {
+    background: linear-gradient(135deg, #f44336, #c62828);
+    border-color: #b71c1c;
+    box-shadow: 0 4px 15px rgba(244, 67, 54, 0.4);
+    animation: none;
+}
+
+.turn-indicator.game-draw {
+    background: linear-gradient(135deg, #ff9800, #ef6c00);
+    border-color: #e65100;
+    box-shadow: 0 4px 15px rgba(255, 152, 0, 0.4);
+    animation: none;
+}
+
+@keyframes victoryPulse {
+    0%, 100% { 
+        transform: scale(1);
+        box-shadow: 0 4px 20px rgba(76, 175, 80, 0.5);
+    }
+    50% { 
+        transform: scale(1.03);
+        box-shadow: 0 6px 25px rgba(76, 175, 80, 0.7);
+    }
+}
+
 .turn-message {
     font-size: 1.4em;
     font-weight: bold;
