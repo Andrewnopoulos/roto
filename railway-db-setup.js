@@ -11,7 +11,11 @@ async function setupDatabase() {
     try {
         // Initialize database with Railway environment variables
         const db = new Database({
-            connectionString: process.env.DATABASE_URL,
+            host: process.env.PGHOST,
+            port: process.env.PGPORT || 5432,
+            database: process.env.PGDATABASE,
+            user: process.env.PGUSER,
+            password: process.env.PGPASSWORD,
             ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
         });
         
