@@ -13,7 +13,9 @@ const server = http.createServer(app);
 // Configure Socket.io with security options
 const io = socketIo(server, {
     cors: {
-        origin: process.env.NODE_ENV === 'production' ? false : ["http://localhost:3000"],
+        origin: process.env.NODE_ENV === 'production' ? 
+            (process.env.RAILWAY_PUBLIC_DOMAIN ? [`https://${process.env.RAILWAY_PUBLIC_DOMAIN}`] : false) : 
+            ["http://localhost:3000"],
         methods: ["GET", "POST"]
     },
     transports: ['websocket', 'polling']
@@ -561,6 +563,15 @@ app.get('/health', (req, res) => {
         status: 'ok', 
         timestamp: new Date().toISOString(),
         rooms: gameManager.rooms.size
+    });
+});
+
+// Health check endpoint for Railway
+app.get('/health', (req, res) => {
+    res.status(200).json({ 
+        status: 'healthy', 
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime()
     });
 });
 

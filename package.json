@@ -15,7 +15,9 @@
     "docker:run": "docker run -p 3000:3000 roto-game",
     "docker:compose": "docker-compose up -d",
     "docker:compose:prod": "docker-compose --profile production up -d",
-    "docker:stop": "docker-compose down"
+    "docker:stop": "docker-compose down",
+    "railway:build": "echo 'Build completed successfully'",
+    "railway:deploy": "node railway-db-setup.js && node server.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

@@ -150,7 +150,93 @@ Tests cover:
 
 ## Deployment
 
-### Docker Deployment (Recommended)
+### Railway Deployment (Cloud Hosting)
+
+Deploy your Roto game to Railway for easy cloud hosting with automatic HTTPS and database management.
+
+#### Prerequisites
+- Railway account (sign up at [railway.app](https://railway.app))
+- Git repository with your code
+- Railway CLI (optional): `npm install -g @railway/cli`
+
+#### Step-by-Step Deployment
+
+**1. Prepare Your Repository**
+```bash
+git add .
+git commit -m "Prepare for Railway deployment"
+git push origin main
+```
+
+**2. Create Railway Project**
+- Go to [railway.app](https://railway.app) and sign in
+- Click "New Project" → "Deploy from GitHub repo"
+- Select your repository and click "Deploy Now"
+
+**3. Add PostgreSQL Database**
+- In your Railway project dashboard, click "New Service"
+- Select "Database" → "Add PostgreSQL"
+- Railway automatically creates the database and connection variables
+
+**4. Configure Environment Variables**
+
+In your Railway service "Variables" tab, add:
+
+```env
+NODE_ENV=production
+SESSION_SECRET=your-super-secret-session-key-change-this-in-production
+JWT_SECRET=your-jwt-secret-change-this-in-production
+RATE_LIMIT_POINTS=50
+RATE_LIMIT_DURATION=1
+LOG_LEVEL=info
+ROOM_TIMEOUT_MINUTES=30
+MAX_CONCURRENT_ROOMS=1000
+```
+
+**Note**: Railway automatically provides database variables (`DATABASE_URL`, `PGHOST`, etc.)
+
+**5. Configure Deployment Settings**
+- **Start Command**: `npm start`
+- **Build Command**: `npm run railway:build`
+- **Port**: Auto-detected (or set to `8080`)
+
+**6. Deploy and Configure CORS**
+
+After first deployment, add this variable with your actual Railway domain:
+```env
+RAILWAY_PUBLIC_DOMAIN=your-app-name.railway.app
+```
+
+**7. Test Your Deployment**
+- Visit your Railway URL: `https://your-app-name.railway.app`
+- Test health endpoint: `https://your-app-name.railway.app/health`
+- Create and join game rooms
+- Test multiplayer gameplay
+
+#### Railway Features Included
+- ✅ **Automatic HTTPS** and custom domains
+- ✅ **PostgreSQL database** with automatic backups
+- ✅ **Real-time monitoring** and logs
+- ✅ **Auto-scaling** based on traffic
+- ✅ **Zero-downtime deployments** via GitHub integration
+- ✅ **WebSocket support** for real-time gameplay
+
+#### Troubleshooting Railway Deployment
+
+**Database Issues:**
+- Ensure PostgreSQL service is running in Railway dashboard
+- Check deployment logs for migration errors
+- Verify `DATABASE_URL` is automatically set
+
+**CORS Issues:**
+- Ensure `RAILWAY_PUBLIC_DOMAIN` matches your actual domain
+- Check Socket.io CORS configuration in logs
+
+**Performance Issues:**
+- Monitor resource usage in Railway metrics
+- Consider upgrading plan for higher traffic
+
+### Docker Deployment (Self-Hosted)
 
 1. Build and run with Docker Compose:
 ```bash
