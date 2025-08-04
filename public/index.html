@@ -46,12 +46,14 @@
         <div id="game" class="screen">
             <div class="game-container">
                 <div class="game-header">
-                    <h2>Room: <span id="gameRoomId"></span></h2>
-                    <div class="game-info">
-                        <div>Current Turn: <span id="currentTurn">Player 1</span></div>
-                        <div>Phase: <span id="gamePhase">Placement</span></div>
-                        <div>You are: <span id="playerRole">Player 1</span></div>
+                    <!-- Prominent Turn Indicator -->
+                    <div id="turnIndicator" class="turn-indicator">
+                        <div id="turnMessage" class="turn-message">Your Turn!</div>
+                        <div id="turnSubtext" class="turn-subtext">Click to place your piece</div>
                     </div>
+                    
+                    <!-- Subtle room info -->
+                    <div class="room-info">Room: <span id="gameRoomId"></span></div>
                 </div>
                 
                 <div class="board-container">

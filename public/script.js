@@ -42,12 +42,14 @@ class RotoGame {
         
         // Game elements
         this.gameRoomIdSpan = document.getElementById('gameRoomId');
-        this.currentTurnSpan = document.getElementById('currentTurn');
-        this.gamePhaseSpan = document.getElementById('gamePhase');
-        this.playerRoleSpan = document.getElementById('playerRole');
         this.gameBoardSvg = document.getElementById('gameBoard');
         this.restartGameBtn = document.getElementById('restartGame');
         this.endGameBtn = document.getElementById('endGame');
+        
+        // Turn indicator elements
+        this.turnIndicator = document.getElementById('turnIndicator');
+        this.turnMessage = document.getElementById('turnMessage');
+        this.turnSubtext = document.getElementById('turnSubtext');
         
         // Notifications
         this.notifications = document.getElementById('notifications');
@@ -260,9 +262,8 @@ class RotoGame {
     }
     
     updateGameDisplay() {
-        // Update game info
-        this.currentTurnSpan.textContent = `Player ${this.currentPlayer}`;
-        this.gamePhaseSpan.textContent = this.gamePhase === 'placement' ? 'Placement' : 'Movement';
+        // Update prominent turn indicator
+        this.updateTurnIndicator();
         
         // Update board display
         this.cells.forEach((cell, index) => {
@@ -279,11 +280,40 @@ class RotoGame {
             }
         });
         
-        // Add turn indicator
+        // Add turn indicator to board
         if (this.currentPlayer === this.playerNumber) {
             this.gameBoardSvg.classList.add('your-turn');
         } else {
             this.gameBoardSvg.classList.remove('your-turn');
+        }
+    }
+    
+    updateTurnIndicator() {
+        // Clear previous classes
+        this.turnIndicator.className = 'turn-indicator';
+        
+        if (!this.gameActive) {
+            // Game not active
+            this.turnIndicator.classList.add('waiting');
+            this.turnMessage.textContent = 'Game Not Active';
+            this.turnSubtext.textContent = 'Waiting for game to start...';
+        } else if (this.currentPlayer === this.playerNumber) {
+            // Your turn
+            this.turnMessage.textContent = 'YOUR TURN!';
+            if (this.gamePhase === 'placement') {
+                this.turnSubtext.textContent = 'Click an empty circle to place your piece';
+            } else {
+                if (this.selectedPosition !== null) {
+                    this.turnSubtext.textContent = 'Click where you want to move your piece';
+                } else {
+                    this.turnSubtext.textContent = 'Click one of your pieces to select it';
+                }
+            }
+        } else {
+            // Opponent's turn
+            this.turnIndicator.classList.add('opponent-turn');
+            this.turnMessage.textContent = 'OPPONENT\'S TURN';
+            this.turnSubtext.textContent = 'Wait for your opponent to make their move...';
         }
     }
     
