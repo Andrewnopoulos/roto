@@ -35,32 +35,27 @@ const authenticateUser = async (req, res, next) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
         
         // Get user from database
-        const connection = await db.getConnection();
-        try {
-            const [users] = await connection.execute(
-                'SELECT id, username, email, created_at FROM users WHERE id = ?',
-                [decoded.userId]
-            );
+        const users = await db.execute(
+            'SELECT id, username, email, created_at FROM users WHERE id = $1',
+            [decoded.userId]
+        );
 
-            if (users.length === 0) {
-                return res.status(401).json({
-                    success: false,
-                    error: 'Invalid authentication token'
-                });
-            }
-
-            req.user = {
-                id: users[0].id,
-                username: users[0].username,
-                email: users[0].email,
-                createdAt: users[0].created_at,
-                isAdmin: decoded.isAdmin || false
-            };
-
-            next();
-        } finally {
-            connection.release();
+        if (users.length === 0) {
+            return res.status(401).json({
+                success: false,
+                error: 'Invalid authentication token'
+            });
         }
+
+        req.user = {
+            id: users[0].id,
+            username: users[0].username,
+            email: users[0].email,
+            createdAt: users[0].created_at,
+            isAdmin: decoded.isAdmin || false
+        };
+
+        next();
 
     } catch (error) {
         if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {

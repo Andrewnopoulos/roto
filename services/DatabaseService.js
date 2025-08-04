@@ -1,9 +1,12 @@
 /**
  * Database Service
  * Handles database connections and common database operations
+ * Updated to use PostgreSQL consistently with the rest of the application
+ * Includes comprehensive SQL injection protection
  */
 
-const mysql = require('mysql2/promise');
+const { Pool } = require('pg');
+const SQLSecurityValidator = require('../utils/sqlSecurityValidator');
 
 class DatabaseService {
     constructor() {
@@ -19,38 +22,34 @@ class DatabaseService {
         try {
             const config = {
                 host: process.env.DB_HOST || 'localhost',
-                port: process.env.DB_PORT || 3306,
-                user: process.env.DB_USER || 'root',
+                port: process.env.DB_PORT || 5432,
+                user: process.env.DB_USER || 'postgres',
                 password: process.env.DB_PASSWORD || '',
-                database: process.env.DB_NAME || 'roto',
-                waitForConnections: true,
-                connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT) || 10,
-                queueLimit: 0,
-                acquireTimeout: 60000,
-                timeout: 60000,
-                reconnect: true,
-                charset: 'utf8mb4',
-                timezone: '+00:00'
+                database: process.env.DB_NAME || 'roto_db',
+                max: parseInt(process.env.DB_CONNECTION_LIMIT) || 20,
+                idleTimeoutMillis: 30000,
+                connectionTimeoutMillis: 2000,
+                ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
             };
 
-            this.pool = mysql.createPool(config);
+            this.pool = new Pool(config);
             this.isInitialized = true;
 
-            // Test the connection
-            this.testConnection();
+            // Test the connection (only if DB_PASSWORD is properly configured)
+            if (process.env.DB_PASSWORD && process.env.DB_PASSWORD !== '') {
+                this.testConnection().catch(() => {
+                    console.warn('Database connection test failed during initialization');
+                });
+            }
 
             // Handle pool events
-            this.pool.on('connection', (connection) => {
-                console.log('Database connection established as id ' + connection.threadId);
+            this.pool.on('connect', () => {
+                console.log('Database connection established');
             });
 
             this.pool.on('error', (err) => {
                 console.error('Database pool error:', err);
-                if (err.code === 'PROTOCOL_CONNECTION_LOST') {
-                    this.initializePool();
-                } else {
-                    throw err;
-                }
+                throw err;
             });
 
         } catch (error) {
@@ -64,9 +63,9 @@ class DatabaseService {
      */
     async testConnection() {
         try {
-            const connection = await this.pool.getConnection();
-            await connection.ping();
-            connection.release();
+            const client = await this.pool.connect();
+            await client.query('SELECT NOW()');
+            client.release();
             console.log('Database connection test successful');
         } catch (error) {
             console.error('Database connection test failed:', error);
@@ -75,8 +74,8 @@ class DatabaseService {
     }
 
     /**
-     * Get a connection from the pool
-     * @returns {Promise<Connection>} Database connection
+     * Get a client from the pool
+     * @returns {Promise<Client>} Database client
      */
     async getConnection() {
         if (!this.isInitialized || !this.pool) {
@@ -84,7 +83,7 @@ class DatabaseService {
         }
 
         try {
-            return await this.pool.getConnection();
+            return await this.pool.connect();
         } catch (error) {
             console.error('Error getting database connection:', error);
             throw error;
@@ -92,23 +91,34 @@ class DatabaseService {
     }
 
     /**
-     * Execute a query with parameters
+     * Execute a query with parameters (with security validation)
      * @param {string} query - SQL query
      * @param {Array} params - Query parameters
      * @returns {Promise<Array>} Query results
      */
     async execute(query, params = []) {
-        const connection = await this.getConnection();
+        // Validate query for security
+        const validation = SQLSecurityValidator.validateQuery(query, params);
+        if (!validation.isValid) {
+            const sanitizedQuery = SQLSecurityValidator.sanitizeForLogging(query);
+            console.error('SQL Security Validation Failed:', {
+                query: sanitizedQuery,
+                errors: validation.errors
+            });
+            throw new Error(`SQL validation failed: ${validation.errors.join(', ')}`);
+        }
+
+        const client = await this.getConnection();
         try {
-            const [results] = await connection.execute(query, params);
-            return results;
+            const result = await client.query(query, params);
+            return result.rows;
         } catch (error) {
             console.error('Database query error:', error);
-            console.error('Query:', query);
-            console.error('Params:', params);
+            console.error('Query:', SQLSecurityValidator.sanitizeForLogging(query));
+            console.error('Params:', params.map(p => SQLSecurityValidator.sanitizeForLogging(String(p))));
             throw error;
         } finally {
-            connection.release();
+            client.release();
         }
     }
 
@@ -118,40 +128,49 @@ class DatabaseService {
      * @returns {Promise<*>} Transaction result
      */
     async transaction(callback) {
-        const connection = await this.getConnection();
+        const client = await this.getConnection();
         try {
-            await connection.beginTransaction();
-            const result = await callback(connection);
-            await connection.commit();
+            await client.query('BEGIN');
+            const result = await callback(client);
+            await client.query('COMMIT');
             return result;
         } catch (error) {
-            await connection.rollback();
+            await client.query('ROLLBACK');
             throw error;
         } finally {
-            connection.release();
+            client.release();
         }
     }
 
     /**
-     * Insert a record and return the inserted ID
+     * Insert a record and return the inserted ID (with security validation)
      * @param {string} table - Table name
      * @param {Object} data - Data to insert
      * @returns {Promise<number>} Inserted ID
      */
     async insert(table, data) {
+        // Validate table name for security
+        if (!SQLSecurityValidator.isValidTableName(table)) {
+            throw new Error(`Invalid table name: ${SQLSecurityValidator.sanitizeForLogging(table)}`);
+        }
+
         const fields = Object.keys(data);
         const values = Object.values(data);
-        const placeholders = fields.map(() => '?').join(', ');
         
-        const query = `INSERT INTO ${table} (${fields.join(', ')}) VALUES (${placeholders})`;
+        // Validate column names
+        fields.forEach(field => {
+            if (!SQLSecurityValidator.isValidColumnName(field)) {
+                throw new Error(`Invalid column name: ${SQLSecurityValidator.sanitizeForLogging(field)}`);
+            }
+        });
+
+        const placeholders = fields.map((_, index) => `$${index + 1}`).join(', ');
+        const escapedFields = SQLSecurityValidator.escapeIdentifiers(fields);
+        const escapedTable = SQLSecurityValidator.escapeIdentifier(table);
         
-        const connection = await this.getConnection();
-        try {
-            const [result] = await connection.execute(query, values);
-            return result.insertId;
-        } finally {
-            connection.release();
-        }
+        const query = `INSERT INTO ${escapedTable} (${escapedFields.join(', ')}) VALUES (${placeholders}) RETURNING id`;
+        
+        return this.execute(query, values).then(rows => rows[0].id);
     }
 
     /**
@@ -162,18 +181,21 @@ class DatabaseService {
      * @returns {Promise<number>} Number of affected rows
      */
     async update(table, data, where) {
-        const setFields = Object.keys(data).map(field => `${field} = ?`).join(', ');
-        const whereFields = Object.keys(where).map(field => `${field} = ?`).join(' AND ');
+        const dataValues = Object.values(data);
+        const whereValues = Object.values(where);
+        
+        const setFields = Object.keys(data).map((field, index) => `${field} = $${index + 1}`).join(', ');
+        const whereFields = Object.keys(where).map((field, index) => `${field} = $${dataValues.length + index + 1}`).join(' AND ');
         
         const query = `UPDATE ${table} SET ${setFields} WHERE ${whereFields}`;
-        const params = [...Object.values(data), ...Object.values(where)];
+        const params = [...dataValues, ...whereValues];
         
-        const connection = await this.getConnection();
+        const client = await this.getConnection();
         try {
-            const [result] = await connection.execute(query, params);
-            return result.affectedRows;
+            const result = await client.query(query, params);
+            return result.rowCount;
         } finally {
-            connection.release();
+            client.release();
         }
     }
 
@@ -184,16 +206,16 @@ class DatabaseService {
      * @returns {Promise<number>} Number of affected rows
      */
     async delete(table, where) {
-        const whereFields = Object.keys(where).map(field => `${field} = ?`).join(' AND ');
+        const whereFields = Object.keys(where).map((field, index) => `${field} = $${index + 1}`).join(' AND ');
         const query = `DELETE FROM ${table} WHERE ${whereFields}`;
         const params = Object.values(where);
         
-        const connection = await this.getConnection();
+        const client = await this.getConnection();
         try {
-            const [result] = await connection.execute(query, params);
-            return result.affectedRows;
+            const result = await client.query(query, params);
+            return result.rowCount;
         } finally {
-            connection.release();
+            client.release();
         }
     }
 
@@ -210,33 +232,36 @@ class DatabaseService {
 
         // Add WHERE clause
         if (Object.keys(where).length > 0) {
-            const whereFields = Object.keys(where).map(field => `${field} = ?`).join(' AND ');
+            const whereFields = Object.keys(where).map((field, index) => `${field} = $${index + 1}`).join(' AND ');
             query += ` WHERE ${whereFields}`;
             params.push(...Object.values(where));
         }
 
-        // Add ORDER BY
+        // Add ORDER BY (with validation)
         if (options.orderBy) {
+            if (!SQLSecurityValidator.isValidOrderBy(options.orderBy)) {
+                throw new Error(`Invalid ORDER BY clause: ${SQLSecurityValidator.sanitizeForLogging(options.orderBy)}`);
+            }
             query += ` ORDER BY ${options.orderBy}`;
         }
 
         // Add LIMIT and OFFSET
         if (options.limit) {
-            query += ` LIMIT ?`;
+            query += ` LIMIT $${params.length + 1}`;
             params.push(options.limit);
             
             if (options.offset) {
-                query += ` OFFSET ?`;
+                query += ` OFFSET $${params.length + 1}`;
                 params.push(options.offset);
             }
         }
 
-        const connection = await this.getConnection();
+        const client = await this.getConnection();
         try {
-            const [results] = await connection.execute(query, params);
-            return results;
+            const result = await client.query(query, params);
+            return result.rows;
         } finally {
-            connection.release();
+            client.release();
         }
     }
 
@@ -251,17 +276,17 @@ class DatabaseService {
         const params = [];
 
         if (Object.keys(where).length > 0) {
-            const whereFields = Object.keys(where).map(field => `${field} = ?`).join(' AND ');
+            const whereFields = Object.keys(where).map((field, index) => `${field} = $${index + 1}`).join(' AND ');
             query += ` WHERE ${whereFields}`;
             params.push(...Object.values(where));
         }
 
-        const connection = await this.getConnection();
+        const client = await this.getConnection();
         try {
-            const [results] = await connection.execute(query, params);
-            return results[0].count;
+            const result = await client.query(query, params);
+            return parseInt(result.rows[0].count);
         } finally {
-            connection.release();
+            client.release();
         }
     }
 
@@ -287,21 +312,25 @@ class DatabaseService {
     }
 
     /**
-     * Escape identifier (table/column names)
+     * Escape identifier (table/column names) - PostgreSQL version
      * @param {string} identifier - Identifier to escape
      * @returns {string} Escaped identifier
      */
     escapeId(identifier) {
-        return mysql.escapeId(identifier);
+        return `"${identifier.replace(/"/g, '""')}"`;
     }
 
     /**
-     * Escape value
+     * Escape value - PostgreSQL version (note: parameterized queries are preferred)
      * @param {*} value - Value to escape
      * @returns {string} Escaped value
      */
     escape(value) {
-        return mysql.escape(value);
+        if (value === null) return 'NULL';
+        if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
+        if (typeof value === 'number') return value.toString();
+        if (typeof value === 'string') return `'${value.replace(/'/g, "''")}'`;
+        return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
     }
 
     /**
@@ -339,9 +368,9 @@ class DatabaseService {
      */
     async ping() {
         try {
-            const connection = await this.getConnection();
-            await connection.ping();
-            connection.release();
+            const client = await this.getConnection();
+            await client.query('SELECT 1');
+            client.release();
             return true;
         } catch (error) {
             console.error('Database ping failed:', error);

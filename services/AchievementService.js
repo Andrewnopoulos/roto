@@ -257,10 +257,11 @@ class AchievementService {
 
             for (const achievement of defaultAchievements) {
                 await connection.execute(`
-                    INSERT IGNORE INTO achievements (
+                    INSERT INTO achievements (
                         name, description, category, condition_type, 
                         condition_value, points, icon_url
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    ON CONFLICT (name) DO NOTHING
                 `, [
                     achievement.name,
                     achievement.description,
@@ -290,7 +291,7 @@ class AchievementService {
 
             // Get current player stats
             const [playerStats] = await connection.execute(
-                'SELECT * FROM users WHERE id = ?',
+                'SELECT * FROM users WHERE id = $1',
                 [userId]
             );
 
@@ -308,7 +309,7 @@ class AchievementService {
                 AND a.id NOT IN (
                     SELECT pa.achievement_id 
                     FROM player_achievements pa 
-                    WHERE pa.user_id = ?
+                    WHERE pa.user_id = $1
                 )
             `, [userId]);
 
@@ -398,7 +399,7 @@ class AchievementService {
     async awardAchievement(connection, userId, achievementId) {
         await connection.execute(`
             INSERT INTO player_achievements (user_id, achievement_id, progress)
-            VALUES (?, ?, ?)
+            VALUES ($1, $2, $3)
         `, [userId, achievementId, 100]); // 100% progress for completed achievement
     }
 
@@ -413,8 +414,8 @@ class AchievementService {
         const [streakData] = await connection.execute(`
             SELECT DATE(created_at) as game_date
             FROM game_statistics
-            WHERE (player1_id = ? OR player2_id = ?)
-            AND created_at >= DATE_SUB(CURRENT_DATE, INTERVAL ? DAY)
+            WHERE (player1_id = $1 OR player2_id = $2)
+            AND created_at >= CURRENT_DATE - INTERVAL '$3 days'
             GROUP BY DATE(created_at)
             ORDER BY game_date DESC
         `, [userId, userId, requiredDays]);
@@ -444,10 +445,10 @@ class AchievementService {
         const [weekData] = await connection.execute(`
             SELECT 
                 COUNT(*) as total_games,
-                SUM(CASE WHEN winner_id = ? THEN 1 ELSE 0 END) as wins
+                SUM(CASE WHEN winner_id = $1 THEN 1 ELSE 0 END) as wins
             FROM game_statistics
-            WHERE (player1_id = ? OR player2_id = ?)
-            AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+            WHERE (player1_id = $2 OR player2_id = $3)
+            AND created_at >= NOW() - INTERVAL '7 days'
         `, [userId, userId, userId]);
 
         const data = weekData[0];
@@ -465,11 +466,11 @@ class AchievementService {
         const [comebackData] = await connection.execute(`
             SELECT COUNT(*) as comeback_wins
             FROM game_statistics gs
-            WHERE gs.winner_id = ?
+            WHERE gs.winner_id = $1
             AND (
-                (gs.player1_id = ? AND gs.player1_rating_before < gs.player2_rating_before)
+                (gs.player1_id = $2 AND gs.player1_rating_before < gs.player2_rating_before)
                 OR
-                (gs.player2_id = ? AND gs.player2_rating_before < gs.player1_rating_before)
+                (gs.player2_id = $3 AND gs.player2_rating_before < gs.player1_rating_before)
             )
         `, [userId, userId, userId]);
 
@@ -492,7 +493,7 @@ class AchievementService {
                     a.icon_url, pa.earned_at, pa.progress
                 FROM achievements a
                 JOIN player_achievements pa ON a.id = pa.achievement_id
-                WHERE pa.user_id = ?
+                WHERE pa.user_id = $1
                 ORDER BY pa.earned_at DESC
             `, [userId]);
 
@@ -506,14 +507,14 @@ class AchievementService {
                 AND a.id NOT IN (
                     SELECT pa.achievement_id 
                     FROM player_achievements pa 
-                    WHERE pa.user_id = ?
+                    WHERE pa.user_id = $1
                 )
                 ORDER BY a.category, a.condition_value
             `, [userId]);
 
             // Calculate progress for available achievements
             const [playerStats] = await connection.execute(
-                'SELECT * FROM users WHERE id = ?',
+                'SELECT * FROM users WHERE id = $1',
                 [userId]
             );
 
@@ -593,8 +594,8 @@ class AchievementService {
                 const [dailyStreak] = await connection.execute(`
                     SELECT COUNT(DISTINCT DATE(created_at)) as streak_days
                     FROM game_statistics
-                    WHERE (player1_id = ? OR player2_id = ?)
-                    AND created_at >= DATE_SUB(CURRENT_DATE, INTERVAL 30 DAY)
+                    WHERE (player1_id = $1 OR player2_id = $2)
+                    AND created_at >= CURRENT_DATE - INTERVAL '30 days'
                 `, [userId, userId]);
                 return dailyStreak[0].streak_days;
 
@@ -602,11 +603,11 @@ class AchievementService {
                 const [comebackWins] = await connection.execute(`
                     SELECT COUNT(*) as comeback_wins
                     FROM game_statistics gs
-                    WHERE gs.winner_id = ?
+                    WHERE gs.winner_id = $1
                     AND (
-                        (gs.player1_id = ? AND gs.player1_rating_before < gs.player2_rating_before)
+                        (gs.player1_id = $2 AND gs.player1_rating_before < gs.player2_rating_before)
                         OR
-                        (gs.player2_id = ? AND gs.player2_rating_before < gs.player1_rating_before)
+                        (gs.player2_id = $3 AND gs.player2_rating_before < gs.player1_rating_before)
                     )
                 `, [userId, userId, userId]);
                 return comebackWins[0].comeback_wins;
@@ -646,12 +647,12 @@ class AchievementService {
             let queryParams = [limit];
 
             if (category) {
-                categoryFilter = 'WHERE a.category = ?';
+                categoryFilter = 'WHERE a.category = $1';
                 queryParams = [category, limit];
             }
 
-            const [leaderboard] = await connection.execute(`
-                SELECT 
+            const queryTemplate = category ? 
+                `SELECT 
                     u.id, u.username,
                     COUNT(pa.achievement_id) as total_achievements,
                     SUM(a.points) as total_points,
@@ -659,11 +660,23 @@ class AchievementService {
                 FROM users u
                 JOIN player_achievements pa ON u.id = pa.user_id
                 JOIN achievements a ON pa.achievement_id = a.id
-                ${categoryFilter}
+                WHERE a.category = $1
                 GROUP BY u.id, u.username
                 ORDER BY total_points DESC, total_achievements DESC
-                LIMIT ?
-            `, queryParams);
+                LIMIT $2` :
+                `SELECT 
+                    u.id, u.username,
+                    COUNT(pa.achievement_id) as total_achievements,
+                    SUM(a.points) as total_points,
+                    MAX(pa.earned_at) as latest_achievement
+                FROM users u
+                JOIN player_achievements pa ON u.id = pa.user_id
+                JOIN achievements a ON pa.achievement_id = a.id
+                GROUP BY u.id, u.username
+                ORDER BY total_points DESC, total_achievements DESC
+                LIMIT $1`;
+
+            const [leaderboard] = await connection.execute(queryTemplate, queryParams);
 
             return leaderboard.map((entry, index) => ({
                 rank: index + 1,

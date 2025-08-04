@@ -12,7 +12,7 @@ yarn-error.log*
 .env.production.local
 
 # Logs
-logs/
+logs
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -20,7 +20,7 @@ yarn-error.log*
 lerna-debug.log*
 
 # Runtime data
-pids/
+pids
 *.pid
 *.seed
 *.pid.lock
@@ -32,21 +32,29 @@ coverage/
 # nyc test coverage
 .nyc_output
 
+# Grunt intermediate storage
+.grunt
+
+# Bower dependency directory
+bower_components
+
+# node-waf configuration
+.lock-wscript
+
+# Compiled binary addons
+build/Release
+
 # Dependency directories
-node_modules/
 jspm_packages/
+
+# TypeScript cache
+*.tsbuildinfo
 
 # Optional npm cache directory
 .npm
 
 # Optional eslint cache
 .eslintcache
-
-# Microbundle cache
-.rpt2_cache/
-.rts2_cache_cjs/
-.rts2_cache_es/
-.rts2_cache_umd/
 
 # Optional REPL history
 .node_repl_history
@@ -58,10 +66,9 @@ jspm_packages/
 .yarn-integrity
 
 # dotenv environment variables file
-.env
 .env.test
 
-# parcel-bundler cache (https://parceljs.org/)
+# parcel-bundler cache
 .cache
 .parcel-cache
 
@@ -74,42 +81,21 @@ dist
 
 # Gatsby files
 .cache/
-public
+# public - Keep public directory for our static files
 
-# Vuepress build output
-.vuepress/dist
+# Storybook build outputs
+.out
+.storybook-out
 
-# Serverless directories
-.serverless/
+# Temporary folders
+tmp/
+temp/
 
-# FuseBox cache
-.fusebox/
-
-# DynamoDB Local files
-.dynamodb/
-
-# TernJS port file
-.tern-port
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
-# Redis dumps
-dump.rdb
-
-# Docker
-.dockerignore
-Dockerfile
-docker-compose.yml
-
-# IDE files
+# Editor directories and files
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
 
 # OS generated files
 .DS_Store
@@ -120,35 +106,6 @@ docker-compose.yml
 ehthumbs.db
 Thumbs.db
 
-# Temporary files
-tmp/
-temp/
-*.tmp
-
-# Build outputs
-build/
-dist/
-out/
-
-# Test artifacts
-test-results/
-screenshots/
-videos/
-
-# SSL certificates
-*.pem
-*.key
-*.crt
-
-# Backup files
-*.backup
-*.bak
-
-# Game-specific ignores
-game_data/
-replays/
-user_uploads/
-
-# Config files with sensitive data
-config/production.json
-config/local.json
+# Application specific
+audit_temp.txt
+ls_output.txt

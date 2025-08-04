@@ -142,10 +142,20 @@ class GameDatabase {
      */
     async saveGame(gameData) {
         const query = `
-            INSERT OR REPLACE INTO games (
+            INSERT INTO games (
                 gameId, player1Id, player2Id, currentPlayerIndex, phase,
                 board, piecesPlaced, winner, createdAt, lastMoveAt, moveHistory
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            ON CONFLICT (gameId) DO UPDATE SET
+                player1Id = EXCLUDED.player1Id,
+                player2Id = EXCLUDED.player2Id,
+                currentPlayerIndex = EXCLUDED.currentPlayerIndex,
+                phase = EXCLUDED.phase,
+                board = EXCLUDED.board,
+                piecesPlaced = EXCLUDED.piecesPlaced,
+                winner = EXCLUDED.winner,
+                lastMoveAt = EXCLUDED.lastMoveAt,
+                moveHistory = EXCLUDED.moveHistory
         `;
 
         const params = [
@@ -169,7 +179,7 @@ class GameDatabase {
      * Get a game by ID
      */
     async getGame(gameId) {
-        const query = 'SELECT * FROM games WHERE gameId = ? AND status = "active"';
+        const query = 'SELECT * FROM games WHERE gameId = $1 AND status = \'active\'';
         return this.getQuery(query, [gameId]);
     }
 
@@ -193,7 +203,7 @@ class GameDatabase {
     async getPlayerGames(playerId, limit = 10) {
         const query = `
             SELECT * FROM games 
-            WHERE (player1Id = ? OR player2Id = ?) AND status = "active"
+            WHERE (player1Id = $1 OR player2Id = $1) AND status = 'active'
             ORDER BY lastMoveAt DESC
             LIMIT ?
         `;
@@ -206,8 +216,8 @@ class GameDatabase {
     async markGamesAsExpired(gameIds) {
         if (gameIds.length === 0) return;
 
-        const placeholders = gameIds.map(() => '?').join(',');
-        const query = `UPDATE games SET status = "expired" WHERE gameId IN (${placeholders})`;
+        const placeholders = gameIds.map((_, index) => `$${index + 1}`).join(',');
+        const query = `UPDATE games SET status = 'expired' WHERE gameId IN (${placeholders})`;
         return this.runQuery(query, gameIds);
     }
 
@@ -215,7 +225,7 @@ class GameDatabase {
      * Get player statistics
      */
     async getPlayerStats(playerId) {
-        const query = 'SELECT * FROM player_stats WHERE playerId = ?';
+        const query = 'SELECT * FROM player_stats WHERE playerId = $1';
         const stats = await this.getQuery(query, [playerId]);
         
         if (!stats) {
@@ -233,7 +243,7 @@ class GameDatabase {
     async createPlayerStats(playerId) {
         const query = `
             INSERT INTO player_stats (playerId) 
-            VALUES (?)
+            VALUES ($1)
         `;
         return this.runQuery(query, [playerId]);
     }
@@ -278,7 +288,7 @@ class GameDatabase {
         const query = `
             UPDATE player_stats 
             SET ${updates.join(', ')}
-            WHERE playerId = ?
+            WHERE playerId = $1
         `;
 
         return this.runQuery(query, params);
@@ -311,8 +321,11 @@ class GameDatabase {
      */
     async createGameSession(sessionId, gameId, playerId) {
         const query = `
-            INSERT OR REPLACE INTO game_sessions (sessionId, gameId, playerId)
-            VALUES (?, ?, ?)
+            INSERT INTO game_sessions (sessionId, gameId, playerId)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (sessionId) DO UPDATE SET
+                gameId = EXCLUDED.gameId,
+                playerId = EXCLUDED.playerId
         `;
         return this.runQuery(query, [sessionId, gameId, playerId]);
     }
@@ -324,7 +337,7 @@ class GameDatabase {
         const query = `
             UPDATE game_sessions 
             SET lastSeenAt = CURRENT_TIMESTAMP 
-            WHERE sessionId = ?
+            WHERE sessionId = $1
         `;
         return this.runQuery(query, [sessionId]);
     }
@@ -333,7 +346,7 @@ class GameDatabase {
      * Remove a game session
      */
     async removeGameSession(sessionId) {
-        const query = 'DELETE FROM game_sessions WHERE sessionId = ?';
+        const query = 'DELETE FROM game_sessions WHERE sessionId = $1';
         return this.runQuery(query, [sessionId]);
     }
 
@@ -343,7 +356,7 @@ class GameDatabase {
     async getGameSessions(gameId) {
         const query = `
             SELECT * FROM game_sessions 
-            WHERE gameId = ? AND lastSeenAt > datetime('now', '-5 minutes')
+            WHERE gameId = $1 AND lastSeenAt > NOW() - INTERVAL '5 minutes'
             ORDER BY joinedAt ASC
         `;
         return this.allQuery(query, [gameId]);
@@ -355,7 +368,7 @@ class GameDatabase {
     async cleanupOldSessions() {
         const query = `
             DELETE FROM game_sessions 
-            WHERE lastSeenAt < datetime('now', '-10 minutes')
+            WHERE lastSeenAt < NOW() - INTERVAL '10 minutes'
         `;
         return this.runQuery(query);
     }
@@ -380,7 +393,7 @@ class GameDatabase {
                 createdAt,
                 lastMoveAt
             FROM games 
-            WHERE (player1Id = ? OR player2Id = ?) AND status = "active"
+            WHERE (player1Id = $1 OR player2Id = $1) AND status = 'active'
             ORDER BY lastMoveAt DESC
             LIMIT ?
         `;
@@ -395,7 +408,7 @@ class GameDatabase {
             totalGames: 'SELECT COUNT(*) as count FROM games',
             activeGames: 'SELECT COUNT(*) as count FROM games WHERE status = "active" AND phase != "finished"',
             totalPlayers: 'SELECT COUNT(*) as count FROM player_stats',
-            activeSessions: 'SELECT COUNT(*) as count FROM game_sessions WHERE lastSeenAt > datetime("now", "-5 minutes")'
+            activeSessions: 'SELECT COUNT(*) as count FROM game_sessions WHERE lastSeenAt > NOW() - INTERVAL \'5 minutes\''
         };
 
         const results = {};

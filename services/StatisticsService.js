@@ -37,7 +37,7 @@ class StatisticsService {
         const connection = await this.db.getConnection();
         
         try {
-            await connection.beginTransaction();
+            await connection.query('BEGIN');
 
             // Insert game statistics record
             await this.insertGameStatistics(connection, gameData);
@@ -73,9 +73,9 @@ class StatisticsService {
             await this.checkAchievements(connection, player1Id);
             await this.checkAchievements(connection, player2Id);
 
-            await connection.commit();
+            await connection.query('COMMIT');
         } catch (error) {
-            await connection.rollback();
+            await connection.query('ROLLBACK');
             throw error;
         } finally {
             connection.release();
@@ -95,10 +95,10 @@ class StatisticsService {
                 player1_avg_move_time, player2_avg_move_time,
                 player1_rating_before, player2_rating_before,
                 player1_rating_after, player2_rating_after, game_type
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
         `;
 
-        await connection.execute(query, [
+        await connection.query(query, [
             gameData.gameId,
             gameData.player1Id,
             gameData.player2Id,
@@ -134,8 +134,8 @@ class StatisticsService {
         } = playerData;
 
         // Get current player stats
-        const [currentStats] = await connection.execute(
-            'SELECT * FROM users WHERE id = ?',
+        const currentStats = await connection.query(
+            'SELECT * FROM users WHERE id = $1',
             [playerId]
         );
 
@@ -171,20 +171,20 @@ class StatisticsService {
         // Update player statistics
         const updateQuery = `
             UPDATE users SET
-                elo_rating = ?,
-                games_played = ?,
-                games_won = ?,
-                games_lost = ?,
-                games_drawn = ?,
-                current_streak = ?,
-                longest_win_streak = ?,
-                total_playtime_seconds = ?,
-                average_moves_per_game = ?,
+                elo_rating = $1,
+                games_played = $2,
+                games_won = $3,
+                games_lost = $4,
+                games_drawn = $5,
+                current_streak = $6,
+                longest_win_streak = $7,
+                total_playtime_seconds = $8,
+                average_moves_per_game = $9,
                 last_game_played = CURRENT_TIMESTAMP
-            WHERE id = ?
+            WHERE id = $10
         `;
 
-        await connection.execute(updateQuery, [
+        await connection.query(updateQuery, [
             stats.elo_rating + ratingChange,
             newGamesPlayed,
             newGamesWon,
@@ -218,7 +218,7 @@ class StatisticsService {
             WHERE u1.games_played >= 10
         `;
 
-        await connection.execute(query);
+        await connection.query(query);
     }
 
     /**
@@ -231,52 +231,52 @@ class StatisticsService {
         
         try {
             // Get basic player stats
-            const [playerStats] = await connection.execute(
-                'SELECT * FROM users WHERE id = ?',
+            const playerStats = await connection.query(
+                'SELECT * FROM users WHERE id = $1',
                 [userId]
             );
 
-            if (playerStats.length === 0) {
+            if (playerStats.rows.length === 0) {
                 throw new Error('Player not found');
             }
 
-            const stats = playerStats[0];
+            const stats = playerStats.rows[0];
 
             // Get recent games (last 10)
-            const [recentGames] = await connection.execute(`
+            const recentGames = await connection.query(`
                 SELECT gs.*, 
                        u1.username as player1_username,
                        u2.username as player2_username,
                        CASE 
-                           WHEN gs.player1_id = ? THEN gs.player1_rating_after
+                           WHEN gs.player1_id = $1 THEN gs.player1_rating_after
                            ELSE gs.player2_rating_after
                        END as player_rating_after,
                        CASE 
-                           WHEN gs.player1_id = ? THEN gs.player1_rating_before
+                           WHEN gs.player1_id = $2 THEN gs.player1_rating_before
                            ELSE gs.player2_rating_before
                        END as player_rating_before
                 FROM game_statistics gs
                 JOIN users u1 ON gs.player1_id = u1.id
                 JOIN users u2 ON gs.player2_id = u2.id
-                WHERE gs.player1_id = ? OR gs.player2_id = ?
+                WHERE gs.player1_id = $3 OR gs.player2_id = $4
                 ORDER BY gs.created_at DESC
                 LIMIT 10
             `, [userId, userId, userId, userId]);
 
             // Get rating history (last 30 changes)
-            const [ratingHistory] = await connection.execute(`
+            const ratingHistory = await connection.query(`
                 SELECT * FROM rating_history 
-                WHERE user_id = ? 
+                WHERE user_id = $1 
                 ORDER BY created_at DESC 
                 LIMIT 30
             `, [userId]);
 
             // Get achievements
-            const [achievements] = await connection.execute(`
+            const achievements = await connection.query(`
                 SELECT a.*, pa.earned_at, pa.progress
                 FROM achievements a
                 JOIN player_achievements pa ON a.id = pa.achievement_id
-                WHERE pa.user_id = ?
+                WHERE pa.user_id = $1
                 ORDER BY pa.earned_at DESC
             `, [userId]);
 
@@ -288,18 +288,18 @@ class StatisticsService {
                 Math.round(stats.total_playtime_seconds / stats.games_played) : 0;
 
             // Get performance trends (last 30 days)
-            const [performanceTrend] = await connection.execute(`
+            const performanceTrend = await connection.query(`
                 SELECT 
                     DATE(gs.created_at) as game_date,
                     COUNT(*) as games_count,
-                    SUM(CASE WHEN gs.winner_id = ? THEN 1 ELSE 0 END) as wins,
+                    SUM(CASE WHEN gs.winner_id = $1 THEN 1 ELSE 0 END) as wins,
                     AVG(CASE 
-                        WHEN gs.player1_id = ? THEN gs.player1_rating_after
+                        WHEN gs.player1_id = $2 THEN gs.player1_rating_after
                         ELSE gs.player2_rating_after
                     END) as avg_rating
                 FROM game_statistics gs
-                WHERE (gs.player1_id = ? OR gs.player2_id = ?)
-                AND gs.created_at >= DATE_SUB(CURRENT_DATE, INTERVAL 30 DAY)
+                WHERE (gs.player1_id = $3 OR gs.player2_id = $4)
+                AND gs.created_at >= CURRENT_DATE - INTERVAL '30 days'
                 GROUP BY DATE(gs.created_at)
                 ORDER BY game_date ASC
             `, [userId, userId, userId, userId]);
@@ -314,10 +314,10 @@ class StatisticsService {
                     drawRate: stats.games_played > 0 ? 
                         (stats.games_drawn / stats.games_played * 100).toFixed(2) : 0
                 },
-                recentGames,
-                ratingHistory,
-                achievements,
-                performanceTrend
+                recentGames: recentGames.rows,
+                ratingHistory: ratingHistory.rows,
+                achievements: achievements.rows,
+                performanceTrend: performanceTrend.rows
             };
         } finally {
             connection.release();
@@ -353,7 +353,7 @@ class StatisticsService {
                             COUNT(*) as recent_games
                         FROM game_statistics gs, users u
                         WHERE (gs.player1_id = u.id OR gs.player2_id = u.id)
-                        AND gs.created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+                        AND gs.created_at >= NOW() - INTERVAL '${days} days'
                         GROUP BY player_id
                         HAVING recent_games >= 3
                     ) recent ON recent.player_id = u.id
@@ -378,24 +378,24 @@ class StatisticsService {
                 ${joinClause}
                 ${whereClause}
                 ORDER BY u.elo_rating DESC
-                LIMIT ? OFFSET ?
+                LIMIT $1 OFFSET $2
             `;
 
-            const [leaderboard] = await connection.execute(query, [limit, offset]);
+            const leaderboard = await connection.query(query, [limit, offset]);
 
             // Get total count for pagination
-            const [countResult] = await connection.execute(`
+            const countResult = await connection.query(`
                 SELECT COUNT(*) as total
                 FROM users u
                 ${joinClause}
                 ${whereClause}
             `);
 
-            const total = countResult[0].total;
+            const total = countResult.rows[0].total;
             const totalPages = Math.ceil(total / limit);
 
             return {
-                leaderboard,
+                leaderboard: leaderboard.rows,
                 pagination: {
                     page,
                     limit,
@@ -417,27 +417,27 @@ class StatisticsService {
      */
     async checkAchievements(connection, userId) {
         // Get current player stats
-        const [playerStats] = await connection.execute(
-            'SELECT * FROM users WHERE id = ?',
+        const playerStats = await connection.query(
+            'SELECT * FROM users WHERE id = $1',
             [userId]
         );
 
-        if (playerStats.length === 0) return;
+        if (playerStats.rows.length === 0) return;
 
-        const stats = playerStats[0];
+        const stats = playerStats.rows[0];
 
         // Get all achievements not yet earned by this player
-        const [availableAchievements] = await connection.execute(`
+        const availableAchievements = await connection.query(`
             SELECT a.* FROM achievements a
             WHERE a.is_active = TRUE
             AND a.id NOT IN (
                 SELECT pa.achievement_id 
                 FROM player_achievements pa 
-                WHERE pa.user_id = ?
+                WHERE pa.user_id = $1
             )
         `, [userId]);
 
-        for (const achievement of availableAchievements) {
+        for (const achievement of availableAchievements.rows) {
             let earned = false;
 
             switch (achievement.condition_type) {
@@ -456,9 +456,9 @@ class StatisticsService {
             }
 
             if (earned) {
-                await connection.execute(`
+                await connection.query(`
                     INSERT INTO player_achievements (user_id, achievement_id, progress)
-                    VALUES (?, ?, ?)
+                    VALUES ($1, $2, $3)
                 `, [userId, achievement.id, achievement.condition_value]);
             }
         }
@@ -477,59 +477,59 @@ class StatisticsService {
             const dateStr = yesterday.toISOString().split('T')[0];
 
             // Get all active players (played in last 30 days)
-            const [activePlayers] = await connection.execute(`
+            const activePlayers = await connection.query(`
                 SELECT DISTINCT u.id, u.elo_rating
                 FROM users u
                 JOIN game_statistics gs ON (u.id = gs.player1_id OR u.id = gs.player2_id)
-                WHERE gs.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                WHERE gs.created_at >= NOW() - INTERVAL '30 days'
             `);
 
-            for (const player of activePlayers) {
+            for (const player of activePlayers.rows) {
                 // Get player's stats for the day
-                const [dayStats] = await connection.execute(`
+                const dayStats = await connection.query(`
                     SELECT 
                         COUNT(*) as games_played,
-                        SUM(CASE WHEN gs.winner_id = ? THEN 1 ELSE 0 END) as games_won,
-                        SUM(CASE WHEN gs.winner_id != ? AND gs.winner_id IS NOT NULL THEN 1 ELSE 0 END) as games_lost,
+                        SUM(CASE WHEN gs.winner_id = $1 THEN 1 ELSE 0 END) as games_won,
+                        SUM(CASE WHEN gs.winner_id != $2 AND gs.winner_id IS NOT NULL THEN 1 ELSE 0 END) as games_lost,
                         SUM(CASE WHEN gs.winner_id IS NULL THEN 1 ELSE 0 END) as games_drawn,
                         SUM(gs.game_duration_seconds) as total_playtime,
                         AVG(gs.game_duration_seconds) as avg_duration,
                         MIN(CASE 
-                            WHEN gs.player1_id = ? THEN gs.player1_rating_before
+                            WHEN gs.player1_id = $3 THEN gs.player1_rating_before
                             ELSE gs.player2_rating_before
                         END) as rating_start,
                         MAX(CASE 
-                            WHEN gs.player1_id = ? THEN gs.player1_rating_after
+                            WHEN gs.player1_id = $4 THEN gs.player1_rating_after
                             ELSE gs.player2_rating_after
                         END) as rating_end
                     FROM game_statistics gs
-                    WHERE (gs.player1_id = ? OR gs.player2_id = ?)
-                    AND DATE(gs.created_at) = ?
+                    WHERE (gs.player1_id = $5 OR gs.player2_id = $6)
+                    AND DATE(gs.created_at) = $7
                 `, [player.id, player.id, player.id, player.id, player.id, player.id, dateStr]);
 
-                const stats = dayStats[0];
+                const stats = dayStats.rows[0];
                 
                 if (stats.games_played > 0) {
                     const winRate = (stats.games_won / stats.games_played * 100).toFixed(2);
 
-                    await connection.execute(`
+                    await connection.query(`
                         INSERT INTO statistics_snapshots (
                             user_id, snapshot_date, snapshot_type,
                             games_played, games_won, games_lost, games_drawn,
                             rating_start, rating_end, rating_peak,
                             total_playtime_seconds, average_game_duration, win_rate
-                        ) VALUES (?, ?, 'daily', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        ON DUPLICATE KEY UPDATE
-                        games_played = VALUES(games_played),
-                        games_won = VALUES(games_won),
-                        games_lost = VALUES(games_lost),
-                        games_drawn = VALUES(games_drawn),
-                        rating_start = VALUES(rating_start),
-                        rating_end = VALUES(rating_end),
-                        rating_peak = VALUES(rating_peak),
-                        total_playtime_seconds = VALUES(total_playtime_seconds),
-                        average_game_duration = VALUES(average_game_duration),
-                        win_rate = VALUES(win_rate)
+                        ) VALUES ($1, $2, 'daily', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                        ON CONFLICT (user_id, snapshot_date, snapshot_type) DO UPDATE SET
+                        games_played = EXCLUDED.games_played,
+                        games_won = EXCLUDED.games_won,
+                        games_lost = EXCLUDED.games_lost,
+                        games_drawn = EXCLUDED.games_drawn,
+                        rating_start = EXCLUDED.rating_start,
+                        rating_end = EXCLUDED.rating_end,
+                        rating_peak = EXCLUDED.rating_peak,
+                        total_playtime_seconds = EXCLUDED.total_playtime_seconds,
+                        average_game_duration = EXCLUDED.average_game_duration,
+                        win_rate = EXCLUDED.win_rate
                     `, [
                         player.id, dateStr,
                         stats.games_played, stats.games_won, stats.games_lost, stats.games_drawn,

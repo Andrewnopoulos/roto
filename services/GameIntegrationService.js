@@ -43,7 +43,7 @@ class GameIntegrationService {
             const [players] = await connection.execute(`
                 SELECT id, elo_rating, games_played 
                 FROM users 
-                WHERE id IN (?, ?)
+                WHERE id IN ($1, $2)
             `, [player1Id, player2Id]);
 
             if (players.length !== 2) {
@@ -266,7 +266,7 @@ class GameIntegrationService {
             INSERT INTO rating_history (
                 user_id, old_rating, new_rating, rating_change, 
                 game_id, reason
-            ) VALUES (?, ?, ?, ?, ?, ?)
+            ) VALUES ($1, $2, $3, $4, $5, $6)
         `, [
             player1Id,
             player1OldRating,
@@ -285,7 +285,7 @@ class GameIntegrationService {
             INSERT INTO rating_history (
                 user_id, old_rating, new_rating, rating_change, 
                 game_id, reason
-            ) VALUES (?, ?, ?, ?, ?, ?)
+            ) VALUES ($1, $2, $3, $4, $5, $6)
         `, [
             player2Id,
             player2OldRating,
@@ -352,7 +352,7 @@ class GameIntegrationService {
             const [players] = await connection.execute(`
                 SELECT id, username, elo_rating, games_played, games_won, games_lost
                 FROM users 
-                WHERE id IN (?, ?)
+                WHERE id IN ($1, $2)
             `, [player1Id, player2Id]);
 
             if (players.length !== 2) {
@@ -372,12 +372,12 @@ class GameIntegrationService {
             const [headToHead] = await connection.execute(`
                 SELECT 
                     COUNT(*) as total_games,
-                    SUM(CASE WHEN winner_id = ? THEN 1 ELSE 0 END) as player1_wins,
-                    SUM(CASE WHEN winner_id = ? THEN 1 ELSE 0 END) as player2_wins,
+                    SUM(CASE WHEN winner_id = $1 THEN 1 ELSE 0 END) as player1_wins,
+                    SUM(CASE WHEN winner_id = $2 THEN 1 ELSE 0 END) as player2_wins,
                     SUM(CASE WHEN winner_id IS NULL THEN 1 ELSE 0 END) as draws
                 FROM game_statistics
-                WHERE (player1_id = ? AND player2_id = ?) 
-                   OR (player1_id = ? AND player2_id = ?)
+                WHERE (player1_id = $3 AND player2_id = $4) 
+                   OR (player1_id = $5 AND player2_id = $6)
             `, [player1Id, player2Id, player1Id, player2Id, player2Id, player1Id]);
 
             const h2h = headToHead[0];
@@ -459,11 +459,11 @@ class GameIntegrationService {
             const [inactivePlayers] = await connection.execute(`
                 SELECT 
                     id, username, elo_rating, last_game_played,
-                    DATEDIFF(NOW(), COALESCE(last_game_played, created_at)) as days_inactive
+                    (CURRENT_DATE - COALESCE(last_game_played, created_at)::date) as days_inactive
                 FROM users
-                WHERE DATEDIFF(NOW(), COALESCE(last_game_played, created_at)) > ?
+                WHERE (CURRENT_DATE - COALESCE(last_game_played, created_at)::date) > $1
                 AND games_played >= 10
-                AND elo_rating > ?
+                AND elo_rating > $2
             `, [daysSinceLastGame, this.ratingService.RATING_FLOOR]);
 
             const decayResults = [];
@@ -477,7 +477,7 @@ class GameIntegrationService {
                 if (newRating !== player.elo_rating) {
                     // Update player rating
                     await connection.execute(
-                        'UPDATE users SET elo_rating = ? WHERE id = ?',
+                        'UPDATE users SET elo_rating = $1 WHERE id = $2',
                         [newRating, player.id]
                     );
 
@@ -485,7 +485,7 @@ class GameIntegrationService {
                     await connection.execute(`
                         INSERT INTO rating_history (
                             user_id, old_rating, new_rating, rating_change, reason
-                        ) VALUES (?, ?, ?, ?, 'decay')
+                        ) VALUES ($1, $2, $3, $4, 'decay')
                     `, [
                         player.id,
                         player.elo_rating,

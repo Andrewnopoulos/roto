@@ -324,7 +324,7 @@ class StatisticsService {
                 AVG(move_count)::integer as avg_moves
             FROM game_performance
             WHERE user_id = $1 
-                AND created_at >= NOW() - INTERVAL '${days} days'
+                AND created_at >= CURRENT_TIMESTAMP - INTERVAL '${days} days'
             GROUP BY DATE(created_at)
             ORDER BY date DESC
         `;

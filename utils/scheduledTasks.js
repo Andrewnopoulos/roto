@@ -198,36 +198,36 @@ class ScheduledTaskManager {
             let totalCleaned = 0;
             
             try {
-                await connection.beginTransaction();
+                await connection.query('BEGIN');
 
                 // Clean up old rating history (keep last 2 years)
-                const [ratingCleanup] = await connection.execute(`
+                const ratingCleanup = await connection.query(`
                     DELETE FROM rating_history 
-                    WHERE created_at < DATE_SUB(NOW(), INTERVAL 2 YEAR)
+                    WHERE created_at < NOW() - INTERVAL '2 years'
                 `);
-                totalCleaned += ratingCleanup.affectedRows;
+                totalCleaned += ratingCleanup.rowCount;
 
                 // Clean up old statistics snapshots (keep last 1 year of daily, 2 years of weekly/monthly)
-                const [snapshotCleanup] = await connection.execute(`
+                const snapshotCleanup = await connection.query(`
                     DELETE FROM statistics_snapshots 
-                    WHERE (snapshot_type = 'daily' AND snapshot_date < DATE_SUB(CURRENT_DATE, INTERVAL 1 YEAR))
-                       OR (snapshot_type IN ('weekly', 'monthly') AND snapshot_date < DATE_SUB(CURRENT_DATE, INTERVAL 2 YEAR))
+                    WHERE (snapshot_type = 'daily' AND snapshot_date < CURRENT_DATE - INTERVAL '1 year')
+                       OR (snapshot_type IN ('weekly', 'monthly') AND snapshot_date < CURRENT_DATE - INTERVAL '2 years')
                 `);
-                totalCleaned += snapshotCleanup.affectedRows;
+                totalCleaned += snapshotCleanup.rowCount;
 
                 // Clean up very old game statistics (keep last 3 years)
-                const [gameStatsCleanup] = await connection.execute(`
+                const gameStatsCleanup = await connection.query(`
                     DELETE FROM game_statistics 
-                    WHERE created_at < DATE_SUB(NOW(), INTERVAL 3 YEAR)
+                    WHERE created_at < NOW() - INTERVAL '3 years'
                 `);
-                totalCleaned += gameStatsCleanup.affectedRows;
+                totalCleaned += gameStatsCleanup.rowCount;
 
-                await connection.commit();
+                await connection.query('COMMIT');
                 
                 console.log(`Database cleanup completed. Removed ${totalCleaned} old records.`);
                 this.updateTaskStatus('database-cleanup', 'completed');
             } catch (error) {
-                await connection.rollback();
+                await connection.query('ROLLBACK');
                 throw error;
             } finally {
                 connection.release();
@@ -275,7 +275,7 @@ class ScheduledTaskManager {
                         COUNT(DISTINCT u.id) as active_players,
                         COUNT(DISTINCT gs.game_id) as games_today,
                         AVG(gs.game_duration_seconds) as avg_game_duration,
-                        COUNT(DISTINCT CASE WHEN u.last_game_played >= DATE_SUB(NOW(), INTERVAL 24 HOUR) THEN u.id END) as players_last_24h
+                        COUNT(DISTINCT CASE WHEN u.last_game_played >= NOW() - INTERVAL '24 hours' THEN u.id END) as players_last_24h
                     FROM users u
                     LEFT JOIN game_statistics gs ON (u.id = gs.player1_id OR u.id = gs.player2_id) 
                         AND DATE(gs.created_at) = CURRENT_DATE

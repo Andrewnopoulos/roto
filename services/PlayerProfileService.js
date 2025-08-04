@@ -29,7 +29,7 @@ class PlayerProfileService {
                 SELECT u.*, pp.privacy_level, pp.show_rating, pp.show_statistics
                 FROM users u
                 LEFT JOIN player_preferences pp ON u.id = pp.user_id
-                WHERE u.id = ?
+                WHERE u.id = $1
             `, [userId]);
 
             if (playerData.length === 0) {
@@ -116,7 +116,7 @@ class PlayerProfileService {
         const connection = await this.db.getConnection();
         
         try {
-            await connection.beginTransaction();
+            await connection.query('BEGIN');
 
             const allowedFields = ['username', 'email'];
             const updateFields = [];
@@ -138,14 +138,14 @@ class PlayerProfileService {
 
             if (updateFields.length > 0) {
                 updateValues.push(userId);
-                const query = `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`;
+                const query = `UPDATE users SET ${updateFields.join(', ')} WHERE id = $${updateValues.length}`;
                 await connection.execute(query, updateValues);
             }
 
-            await connection.commit();
+            await connection.query('COMMIT');
             return await this.getPlayerProfile(userId, userId);
         } catch (error) {
-            await connection.rollback();
+            await connection.query('ROLLBACK');
             throw error;
         } finally {
             connection.release();
@@ -162,14 +162,14 @@ class PlayerProfileService {
         
         try {
             const [preferences] = await connection.execute(
-                'SELECT * FROM player_preferences WHERE user_id = ?',
+                'SELECT * FROM player_preferences WHERE user_id = $1',
                 [userId]
             );
 
             if (preferences.length === 0) {
                 // Create default preferences
                 await connection.execute(`
-                    INSERT INTO player_preferences (user_id) VALUES (?)
+                    INSERT INTO player_preferences (user_id) VALUES ($1)
                 `, [userId]);
 
                 // Return default preferences
@@ -230,7 +230,7 @@ class PlayerProfileService {
             for (const [key, value] of Object.entries(newPreferences)) {
                 const dbField = key.replace(/([A-Z])/g, '_$1').toLowerCase();
                 if (allowedFields.includes(dbField)) {
-                    updateFields.push(`${dbField} = ?`);
+                    updateFields.push(`${dbField} = $${updateValues.length + 1}`);
                     updateValues.push(
                         dbField === 'notification_preferences' ? JSON.stringify(value) : value
                     );
@@ -241,10 +241,11 @@ class PlayerProfileService {
                 updateFields.push('updated_at = CURRENT_TIMESTAMP');
                 updateValues.push(userId);
 
+                updateValues.push(userId);
                 const query = `
                     UPDATE player_preferences 
                     SET ${updateFields.join(', ')} 
-                    WHERE user_id = ?
+                    WHERE user_id = $${updateValues.length}
                 `;
 
                 await connection.execute(query, updateValues);
@@ -269,20 +270,20 @@ class PlayerProfileService {
         const [activity] = await connection.execute(`
             SELECT 
                 COUNT(*) as games_last_7_days,
-                SUM(CASE WHEN gs.winner_id = ? THEN 1 ELSE 0 END) as wins_last_7_days,
+                SUM(CASE WHEN gs.winner_id = $1 THEN 1 ELSE 0 END) as wins_last_7_days,
                 AVG(gs.game_duration_seconds) as avg_game_duration_last_7_days,
                 MAX(gs.created_at) as last_game_time
             FROM game_statistics gs
-            WHERE (gs.player1_id = ? OR gs.player2_id = ?)
-            AND gs.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+            WHERE (gs.player1_id = $2 OR gs.player2_id = $3)
+            AND gs.created_at >= NOW() - INTERVAL '7 days'
         `, [userId, userId, userId]);
 
         const [ratingTrend] = await connection.execute(`
             SELECT 
                 old_rating, new_rating, created_at
             FROM rating_history
-            WHERE user_id = ?
-            AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+            WHERE user_id = $1
+            AND created_at >= NOW() - INTERVAL '7 days'
             ORDER BY created_at ASC
         `, [userId]);
 
@@ -312,7 +313,7 @@ class PlayerProfileService {
                 a.icon_url, pa.earned_at, pa.progress
             FROM achievements a
             JOIN player_achievements pa ON a.id = pa.achievement_id
-            WHERE pa.user_id = ?
+            WHERE pa.user_id = $1
             ORDER BY pa.earned_at DESC
         `, [userId]);
 
@@ -341,30 +342,30 @@ class PlayerProfileService {
                 u1.username as player1_username,
                 u2.username as player2_username,
                 CASE 
-                    WHEN gs.player1_id = ? THEN 'player1'
+                    WHEN gs.player1_id = $1 THEN 'player1'
                     ELSE 'player2'
                 END as player_role,
                 CASE 
-                    WHEN gs.winner_id = ? THEN 'win'
+                    WHEN gs.winner_id = $2 THEN 'win'
                     WHEN gs.winner_id IS NULL THEN 'draw'
                     ELSE 'loss'
                 END as result,
                 CASE 
-                    WHEN gs.player1_id = ? THEN gs.player1_rating_change
+                    WHEN gs.player1_id = $3 THEN gs.player1_rating_change
                     ELSE gs.player2_rating_change
                 END as rating_change
             FROM game_statistics gs
             JOIN users u1 ON gs.player1_id = u1.id
             JOIN users u2 ON gs.player2_id = u2.id
-            WHERE gs.player1_id = ? OR gs.player2_id = ?
+            WHERE gs.player1_id = $4 OR gs.player2_id = $5
             ORDER BY gs.created_at DESC
-            LIMIT ? OFFSET ?
+            LIMIT $6 OFFSET $7
         `, [userId, userId, userId, userId, userId, limit, offset]);
 
         const [countResult] = await connection.execute(`
             SELECT COUNT(*) as total
             FROM game_statistics gs
-            WHERE gs.player1_id = ? OR gs.player2_id = ?
+            WHERE gs.player1_id = $1 OR gs.player2_id = $2
         `, [userId, userId]);
 
         const total = countResult[0].total;
@@ -399,11 +400,11 @@ class PlayerProfileService {
                     ROUND(u.games_won / GREATEST(u.games_played, 1) * 100, 1) as win_rate
                 FROM users u
                 LEFT JOIN player_preferences pp ON u.id = pp.user_id
-                WHERE u.username LIKE ? 
+                WHERE u.username LIKE $1
                 AND u.games_played > 0
                 AND (pp.privacy_level IS NULL OR pp.privacy_level != 'private')
                 ORDER BY u.elo_rating DESC
-                LIMIT ?
+                LIMIT $2
             `, [`%${query}%`, limit]);
 
             return results.map(player => ({
@@ -481,7 +482,7 @@ class PlayerProfileService {
 
         // Check availability
         const [existing] = await connection.execute(
-            'SELECT id FROM users WHERE username = ? AND id != ?',
+            'SELECT id FROM users WHERE username = $1 AND id != $2',
             [username, excludeUserId || 0]
         );
 
@@ -505,7 +506,7 @@ class PlayerProfileService {
 
         // Check availability
         const [existing] = await connection.execute(
-            'SELECT id FROM users WHERE email = ? AND id != ?',
+            'SELECT id FROM users WHERE email = $1 AND id != $2',
             [email, excludeUserId || 0]
         );
 
