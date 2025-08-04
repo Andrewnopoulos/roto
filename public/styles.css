@@ -13,6 +13,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow-x: hidden;
 }
 
 #app {
@@ -267,7 +268,10 @@ button:active {
 .board-container {
     display: flex;
     justify-content: center;
-    margin: 20px 0;
+    margin: 20px auto;
+    padding: 0 10px;
+    max-width: 100%;
+    overflow: visible;
 }
 
 .board {
@@ -275,6 +279,10 @@ button:active {
     border-radius: 15px;
     background: #fafafa;
     cursor: pointer;
+    width: 100%;
+    height: auto;
+    max-width: 400px;
+    max-height: 400px;
 }
 
 .board.your-turn {
@@ -407,13 +415,13 @@ button:active {
 /* Responsive Design */
 @media (max-width: 600px) {
     #app {
-        padding: 5px;
+        padding: 8px;
     }
     
     .menu-container,
     .lobby-container,
     .game-container {
-        padding: 15px;
+        padding: 12px;
     }
     
     .menu-container h1 {
@@ -421,17 +429,20 @@ button:active {
     }
     
     .board-container {
-        margin: 10px 0;
-        padding: 0 5px;
+        margin: 15px auto;
+        padding: 0 8px;
+        width: 100%;
+        box-sizing: border-box;
     }
     
     .board {
-        width: calc(100vw - 50px);
-        height: calc(100vw - 50px);
-        max-width: 300px;
-        max-height: 300px;
-        min-width: 250px;
-        min-height: 250px;
+        width: calc(100vw - 40px);
+        height: calc(100vw - 40px);
+        max-width: 320px;
+        max-height: 320px;
+        min-width: 280px;
+        min-height: 280px;
+        border-width: 2px;
     }
     
     .turn-indicator {
@@ -468,23 +479,28 @@ button:active {
 /* Extra small mobile devices */
 @media (max-width: 360px) {
     #app {
-        padding: 2px;
+        padding: 4px;
     }
     
     .menu-container,
     .lobby-container,
     .game-container {
-        padding: 10px;
+        padding: 8px;
+    }
+    
+    .board-container {
+        margin: 10px auto;
+        padding: 0 4px;
     }
     
     .board {
-        width: calc(100vw - 30px);
-        height: calc(100vw - 30px);
-        max-width: 280px;
-        max-height: 280px;
-        min-width: 220px;
-        min-height: 220px;
-        border-width: 2px;
+        width: calc(100vw - 24px);
+        height: calc(100vw - 24px);
+        max-width: 300px;
+        max-height: 300px;
+        min-width: 240px;
+        min-height: 240px;
+        border-width: 1px;
     }
     
     .game-header h2 {
