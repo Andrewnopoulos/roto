@@ -482,10 +482,10 @@ io.on('connection', (socket) => {
                 return;
             }
             
-            // Reset game state but keep players
-            room.gameState = 'waiting';
+            // Reset game state but keep players and start immediately
+            room.gameState = 'playing';
             room.board = new Array(9).fill(null);
-            room.currentPlayer = 1;
+            room.currentPlayer = Math.random() < 0.5 ? 1 : 2; // Randomly select first player
             room.gamePhase = 'placement';
             room.piecesPlaced = { 1: 0, 2: 0 };
             room.selectedPosition = null;
@@ -493,7 +493,7 @@ io.on('connection', (socket) => {
             
             // Notify all players in the room
             io.to(roomId).emit('game-restarted', {
-                gameState: 'waiting',
+                gameState: 'playing',
                 board: room.board,
                 currentPlayer: room.currentPlayer,
                 gamePhase: room.gamePhase
@@ -509,12 +509,28 @@ io.on('connection', (socket) => {
     // Handle game end
     socket.on('end-game', (roomId) => {
         try {
-            const room = gameManager.leaveRoom(socket.id);
+            const room = gameManager.rooms.get(roomId);
             if (room) {
-                socket.leave(roomId);
-                socket.to(roomId).emit('game-ended');
+                // Get all players in the room before removing them
+                const playersInRoom = [...room.players];
                 
-                console.log(`Game ended in room ${roomId}`);
+                // Remove all players from the room
+                playersInRoom.forEach(playerId => {
+                    gameManager.leaveRoom(playerId);
+                });
+                
+                // Notify all players that the game ended and they should return to menu
+                io.to(roomId).emit('game-ended');
+                
+                // Make all sockets leave the room
+                playersInRoom.forEach(playerId => {
+                    const playerSocket = io.sockets.sockets.get(playerId);
+                    if (playerSocket) {
+                        playerSocket.leave(roomId);
+                    }
+                });
+                
+                console.log(`Game ended in room ${roomId}, all players removed`);
             }
         } catch (error) {
             console.error('Error ending game:', error);
@@ -560,21 +576,37 @@ app.use((req, res) => {
 });
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('SIGTERM received, shutting down gracefully');
-    server.close(() => {
-        console.log('Server closed');
-        process.exit(0);
-    });
-});
+let isShuttingDown = false;
 
-process.on('SIGINT', () => {
-    console.log('SIGINT received, shutting down gracefully');
+function gracefulShutdown(signal) {
+    if (isShuttingDown) {
+        console.log(`${signal} received again, forcing exit`);
+        process.exit(1);
+    }
+    
+    isShuttingDown = true;
+    console.log(`${signal} received, shutting down gracefully`);
+    
+    // Set a timeout to force exit if graceful shutdown takes too long
+    const shutdownTimeout = setTimeout(() => {
+        console.log('Graceful shutdown timeout, forcing exit');
+        process.exit(1);
+    }, 10000);
+    
     server.close(() => {
-        console.log('Server closed');
-        process.exit(0);
+        console.log('HTTP server closed');
+        
+        // Close Socket.io server
+        io.close(() => {
+            console.log('Socket.io server closed');
+            clearTimeout(shutdownTimeout);
+            process.exit(0);
+        });
     });
-});
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {

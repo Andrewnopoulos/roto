@@ -154,20 +154,23 @@ class RotoGame {
         });
         
         this.socket.on('game-restarted', (data) => {
-            this.gameActive = false;
+            this.gameActive = true;
             this.gameBoard = data.board;
             this.currentPlayer = data.currentPlayer;
             this.gamePhase = data.gamePhase;
             this.selectedPosition = null;
             this.restartGameBtn.style.display = 'none';
             this.updateGameDisplay();
-            this.showLobby();
-            this.showNotification('Game has been restarted. Ready to play again!', 'info');
+            this.showGame();
+            const playerText = this.currentPlayer === this.playerNumber ? 'You go first!' : 'Opponent goes first!';
+            this.showNotification(`New game started! ${playerText}`, 'info');
         });
         
         this.socket.on('game-ended', () => {
             this.resetGame();
-            this.showNotification('Game ended', 'info');
+            this.currentRoom = null;
+            this.showMenu();
+            this.showNotification('Game ended by opponent', 'info');
         });
         
         this.socket.on('error', (error) => {
@@ -235,7 +238,10 @@ class RotoGame {
     endGame() {
         if (this.currentRoom) {
             this.socket.emit('end-game', this.currentRoom);
+            this.socket.emit('leave-room', this.currentRoom);
+            this.currentRoom = null;
             this.resetGame();
+            this.showMenu();
         }
     }
     
