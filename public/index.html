@@ -13,6 +13,64 @@
             <span id="connection-text">Connecting...</span>
         </div>
 
+        <!-- Login Dialog (Top-left overlay) -->
+        <div id="loginDialog" class="login-dialog hidden">
+            <div class="login-dialog-content">
+                <div class="login-dialog-header">
+                    <h3>Account</h3>
+                    <button id="closeLoginDialog" class="close-btn">&times;</button>
+                </div>
+                
+                <div class="auth-tabs">
+                    <button id="loginTab" class="auth-tab active">Login</button>
+                    <button id="registerTab" class="auth-tab">Register</button>
+                </div>
+                
+                <form id="loginForm" class="auth-form">
+                    <input type="email" id="loginEmail" placeholder="Email" required>
+                    <input type="password" id="loginPassword" placeholder="Password" required>
+                    <button type="submit" id="loginBtn">Login</button>
+                </form>
+                
+                <form id="registerForm" class="auth-form hidden">
+                    <input type="text" id="registerUsername" placeholder="Username" required>
+                    <input type="email" id="registerEmail" placeholder="Email" required>
+                    <input type="password" id="registerPassword" placeholder="Password (min 6 chars)" required>
+                    <button type="submit" id="registerBtn">Register</button>
+                </form>
+                
+                <div id="authError" class="auth-error hidden"></div>
+            </div>
+        </div>
+
+        <!-- User Status (Top-left) -->
+        <div id="userStatus" class="user-status">
+            <div id="guestStatus" class="guest-status">
+                <span class="guest-icon">👤</span>
+                <span>Guest</span>
+                <button id="showLoginDialog" class="login-prompt-btn">Login / Register</button>
+            </div>
+            <div id="userInfo" class="user-info hidden">
+                <span class="user-icon">🎮</span>
+                <span id="currentUsername">User</span>
+                <button id="logoutBtn" class="logout-btn">Logout</button>
+            </div>
+        </div>
+
+        <!-- Guest Play Warning Dialog -->
+        <div id="guestWarningDialog" class="warning-dialog hidden">
+            <div class="warning-dialog-content">
+                <div class="warning-icon">⚠️</div>
+                <h3>Playing as Guest</h3>
+                <p>You're about to play as a guest. Your game statistics and progress won't be saved.</p>
+                <p><strong>Create an account</strong> to track your rating, wins, and unlock competitive features!</p>
+                <div class="warning-actions">
+                    <button id="continueAsGuest" class="btn-secondary">Continue as Guest</button>
+                    <button id="showLoginFromWarning" class="btn-primary">Login / Register</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Menu Screen -->
         <div id="menu" class="screen active">
             <div class="menu-container">
@@ -50,6 +108,10 @@
                 </details>
                 
                 <div class="menu-form">
+                    <button id="quickplayBtn" class="quickplay-btn">[⚡] Quick Play</button>
+                    <div class="divider">
+                        <span>or</span>
+                    </div>
                     <input type="text" id="roomId" placeholder="Enter Room ID" maxlength="20">
                     <button id="joinRoom">Join Room</button>
                     <button id="createRoom">Create New Room</button>

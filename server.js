@@ -1,3 +1,6 @@
+// Load environment variables
+require('dotenv').config();
+
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
@@ -46,6 +49,16 @@ app.use(cors({
 // Middleware
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json({ limit: '1mb' }));
+
+// API Routes
+try {
+    const apiRoutes = require('./src/routes/index');
+    app.use('/api', apiRoutes);
+    console.log('✅ API routes loaded successfully');
+} catch (error) {
+    console.warn('⚠️  API routes not available:', error.message);
+    console.log('   Game will work with WebSocket-only functionality');
+}
 
 // Direct room join endpoint
 app.get('/room/:roomId', (req, res) => {

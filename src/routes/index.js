@@ -22,6 +22,7 @@ const authRoutes = require('./auth');
 const userRoutes = require('./users');
 const gameRoutes = require('./games');
 const matchRoutes = require('./matches');
+const matchmakingRoutes = require('./matchmaking');
 const leaderboardRoutes = require('./leaderboard');
 const adminRoutes = require('./admin');
 
@@ -54,6 +55,7 @@ router.get('/', asyncHandler(async (req, res) => {
       users: '/api/users',
       games: '/api/games',
       matches: '/api/matches',
+      matchmaking: '/api/matchmaking',
       leaderboard: '/api/leaderboard',
       admin: '/api/admin'
     }
@@ -76,6 +78,9 @@ router.use('/games', rateLimiter, gameRoutes);
 
 // Match management routes
 router.use('/matches', rateLimiter, matchRoutes);
+
+// Matchmaking routes
+router.use('/matchmaking', rateLimiter, matchmakingRoutes);
 
 // Leaderboard routes - can handle more requests for public data
 router.use('/leaderboard', rateLimiter, leaderboardRoutes);

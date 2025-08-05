@@ -10,16 +10,23 @@ class RotoGame {
         this.selectedPosition = null;
         this.gameWinner = null;
         this.connectionStatus = 'connecting';
+        this.currentUser = null;
         
         this.initializeElements();
         this.bindEvents();
         this.setupSocketListeners();
         this.setupConnectionHandling();
-        this.checkForDirectRoomJoin();
+        
+        // Initialize with guest status by default
+        this.showGuestStatus();
+        
+        // Then check if user is authenticated
+        this.checkAuthentication();
     }
     
     initializeElements() {
         // Screens
+        this.loginScreen = document.getElementById('login');
         this.menuScreen = document.getElementById('menu');
         this.lobbyScreen = document.getElementById('lobby');
         this.gameScreen = document.getElementById('game');
@@ -28,10 +35,33 @@ class RotoGame {
         this.connectionStatus = document.getElementById('connection-status');
         this.connectionText = document.getElementById('connection-text');
         
+        // Auth elements
+        this.loginDialog = document.getElementById('loginDialog');
+        this.loginTab = document.getElementById('loginTab');
+        this.registerTab = document.getElementById('registerTab');
+        this.loginForm = document.getElementById('loginForm');
+        this.registerForm = document.getElementById('registerForm');
+        this.authError = document.getElementById('authError');
+        this.closeLoginDialog = document.getElementById('closeLoginDialog');
+        
+        // User status elements
+        this.userStatus = document.getElementById('userStatus');
+        this.guestStatus = document.getElementById('guestStatus');
+        this.userInfo = document.getElementById('userInfo');
+        this.currentUsername = document.getElementById('currentUsername');
+        this.showLoginDialog = document.getElementById('showLoginDialog');
+        this.logoutBtn = document.getElementById('logoutBtn');
+        
+        // Guest warning dialog
+        this.guestWarningDialog = document.getElementById('guestWarningDialog');
+        this.continueAsGuest = document.getElementById('continueAsGuest');
+        this.showLoginFromWarning = document.getElementById('showLoginFromWarning');
+        
         // Menu elements
         this.roomIdInput = document.getElementById('roomId');
         this.joinRoomBtn = document.getElementById('joinRoom');
         this.createRoomBtn = document.getElementById('createRoom');
+        this.quickplayBtn = document.getElementById('quickplayBtn');
         
         // Lobby elements
         this.currentRoomIdSpan = document.getElementById('currentRoomId');
@@ -60,6 +90,21 @@ class RotoGame {
     }
     
     bindEvents() {
+        // Auth dialog events
+        this.showLoginDialog.addEventListener('click', () => this.openLoginDialog());
+        this.closeLoginDialog.addEventListener('click', () => this.closeLoginDialogHandler());
+        this.loginTab.addEventListener('click', () => this.switchToLogin());
+        this.registerTab.addEventListener('click', () => this.switchToRegister());
+        this.loginForm.addEventListener('submit', (e) => this.handleLogin(e));
+        this.registerForm.addEventListener('submit', (e) => this.handleRegister(e));
+        this.logoutBtn.addEventListener('click', () => this.handleLogout());
+        
+        // Guest warning dialog events
+        this.continueAsGuest.addEventListener('click', () => this.proceedWithGuestPlay());
+        this.showLoginFromWarning.addEventListener('click', () => this.showLoginFromGuestWarning());
+        
+        // Game events
+        this.quickplayBtn.addEventListener('click', () => this.startQuickPlay());
         this.joinRoomBtn.addEventListener('click', () => this.joinRoom());
         this.createRoomBtn.addEventListener('click', () => this.createRoom());
         this.shareRoomBtn.addEventListener('click', () => this.shareCurrentRoom());
@@ -223,6 +268,311 @@ class RotoGame {
         const roomId = this.generateRoomId();
         this.roomIdInput.value = roomId;
         this.socket.emit('join-room', roomId);
+    }
+    
+    async startQuickPlay() {
+        // Check if user is authenticated
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+            // Show guest warning dialog
+            this.showGuestWarningDialog();
+            return;
+        }
+        
+        // User is authenticated, proceed with quickplay
+        this.proceedWithQuickplay(token);
+    }
+    
+    async proceedWithQuickplay(token = null) {
+        // Disable quickplay button and show loading state
+        this.quickplayBtn.disabled = true;
+        this.quickplayBtn.textContent = '⏳ Finding match...';
+        
+        try {
+            if (token) {
+                // Authenticated quickplay
+                const response = await fetch('/api/matchmaking/quickplay', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.message || 'Failed to start quickplay');
+                }
+                
+                // Show success message and wait for match
+                this.showNotification(data.message, 'success');
+                this.quickplayBtn.textContent = '🔍 Searching...';
+                
+                // Set up polling to check for match
+                this.startMatchPolling(token);
+            } else {
+                // Guest quickplay - try API first, fallback to simple room creation
+                console.log('Starting guest quickplay...');
+                
+                try {
+                    const response = await fetch('/api/matchmaking/guest-quickplay', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    console.log('Guest quickplay response status:', response.status);
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        console.log('Guest quickplay API success:', data);
+                        
+                        // Use API response
+                        this.showNotification(data.message, 'info');
+                        this.roomIdInput.value = data.roomId;
+                        this.socket.emit('join-room', data.roomId);
+                        this.resetQuickplayButton();
+                        return;
+                    }
+                } catch (apiError) {
+                    console.warn('Guest quickplay API failed, using fallback:', apiError);
+                }
+                
+                // Fallback: Create room directly (works even if server API isn't available)
+                console.log('Using fallback room creation...');
+                this.showNotification('Creating guest room...', 'info');
+                const roomId = this.generateRoomId();
+                this.roomIdInput.value = roomId;
+                this.socket.emit('join-room', roomId);
+                this.resetQuickplayButton();
+            }
+            
+        } catch (error) {
+            console.error('Quickplay error:', error);
+            this.showNotification(error.message || 'Failed to start quickplay', 'error');
+            this.resetQuickplayButton();
+        }
+    }
+    
+    async startMatchPolling(token) {
+        const pollInterval = setInterval(async () => {
+            try {
+                const response = await fetch('/api/matchmaking/status', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (!data.success || !data.playerStatus) {
+                    // No longer in queue - match found or cancelled
+                    clearInterval(pollInterval);
+                    this.resetQuickplayButton();
+                    return;
+                }
+                
+                // Update estimated wait time
+                const waitTime = Math.round(data.playerStatus.estimatedWaitTime / 1000);
+                if (waitTime > 0) {
+                    this.quickplayBtn.textContent = `⏱️ ~${waitTime}s`;
+                }
+                
+            } catch (error) {
+                console.error('Match polling error:', error);
+                clearInterval(pollInterval);
+                this.resetQuickplayButton();
+            }
+        }, 2000); // Poll every 2 seconds
+        
+        // Stop polling after 5 minutes
+        setTimeout(() => {
+            clearInterval(pollInterval);
+            this.resetQuickplayButton();
+        }, 300000);
+    }
+    
+    resetQuickplayButton() {
+        this.quickplayBtn.disabled = false;
+        this.quickplayBtn.textContent = '[⚡] Quick Play';
+    }
+    
+    // Authentication Methods
+    async checkAuthentication() {
+        const token = localStorage.getItem('authToken');
+        if (token) {
+            try {
+                const response = await fetch('/api/auth/profile', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    this.currentUser = data.user;
+                    this.updateUserDisplay();
+                    this.showUserInfo();
+                    return;
+                }
+            } catch (error) {
+                console.error('Auth check failed:', error);
+            }
+        }
+        
+        // Not authenticated, show guest status
+        this.showGuestStatus();
+    }
+    
+    switchToLogin() {
+        this.loginTab.classList.add('active');
+        this.registerTab.classList.remove('active');
+        this.loginForm.classList.remove('hidden');
+        this.registerForm.classList.add('hidden');
+        this.hideAuthError();
+    }
+    
+    switchToRegister() {
+        this.registerTab.classList.add('active');
+        this.loginTab.classList.remove('active');
+        this.registerForm.classList.remove('hidden');
+        this.loginForm.classList.add('hidden');
+        this.hideAuthError();
+    }
+    
+    async handleLogin(e) {
+        e.preventDefault();
+        
+        const email = document.getElementById('loginEmail').value;
+        const password = document.getElementById('loginPassword').value;
+        
+        try {
+            const response = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email, password })
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                localStorage.setItem('authToken', data.token);
+                this.currentUser = data.user;
+                this.closeLoginDialogHandler();
+                this.updateUserDisplay();
+                this.showUserInfo();
+                this.showNotification('Login successful!', 'success');
+            } else {
+                this.showAuthError(data.message || 'Login failed');
+            }
+        } catch (error) {
+            console.error('Login error:', error);
+            this.showAuthError('Login failed. Please try again.');
+        }
+    }
+    
+    async handleRegister(e) {
+        e.preventDefault();
+        
+        const username = document.getElementById('registerUsername').value;
+        const email = document.getElementById('registerEmail').value;
+        const password = document.getElementById('registerPassword').value;
+        
+        try {
+            const response = await fetch('/api/auth/register', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ username, email, password })
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                localStorage.setItem('authToken', data.token);
+                this.currentUser = data.user;
+                this.closeLoginDialogHandler();
+                this.updateUserDisplay();
+                this.showUserInfo();
+                this.showNotification('Registration successful!', 'success');
+            } else {
+                this.showAuthError(data.message || 'Registration failed');
+            }
+        } catch (error) {
+            console.error('Registration error:', error);
+            this.showAuthError('Registration failed. Please try again.');
+        }
+    }
+    
+    handleLogout() {
+        localStorage.removeItem('authToken');
+        this.currentUser = null;
+        this.showGuestStatus();
+        this.showNotification('Logged out successfully', 'info');
+    }
+    
+    showAuthError(message) {
+        this.authError.textContent = message;
+        this.authError.classList.remove('hidden');
+    }
+    
+    hideAuthError() {
+        this.authError.classList.add('hidden');
+    }
+    
+    updateUserDisplay() {
+        if (this.currentUser) {
+            this.currentUsername.textContent = this.currentUser.username;
+        }
+    }
+    
+    // Dialog management methods
+    openLoginDialog() {
+        this.loginDialog.classList.remove('hidden');
+        this.switchToLogin();
+    }
+    
+    closeLoginDialogHandler() {
+        this.loginDialog.classList.add('hidden');
+        this.hideAuthError();
+        // Clear form fields
+        this.loginForm.reset();
+        this.registerForm.reset();
+    }
+    
+    showGuestStatus() {
+        this.guestStatus.classList.remove('hidden');
+        this.userInfo.classList.add('hidden');
+    }
+    
+    showUserInfo() {
+        this.userInfo.classList.remove('hidden');
+        this.guestStatus.classList.add('hidden');
+    }
+    
+    showGuestWarningDialog() {
+        this.guestWarningDialog.classList.remove('hidden');
+    }
+    
+    hideGuestWarningDialog() {
+        this.guestWarningDialog.classList.add('hidden');
+    }
+    
+    proceedWithGuestPlay() {
+        this.hideGuestWarningDialog();
+        this.proceedWithQuickplay(); // Call without token for guest mode
+    }
+    
+    showLoginFromGuestWarning() {
+        this.hideGuestWarningDialog();
+        this.openLoginDialog();
     }
     
     leaveRoom() {

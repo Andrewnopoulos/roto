@@ -51,7 +51,7 @@ async function authenticate(req, res, next) {
     
     // Fetch user details from database
     const userResult = await query(`
-      SELECT id, email, username, role, status, is_verified, last_login_at
+      SELECT id, email, username, is_active, is_verified, last_login_at
       FROM users 
       WHERE id = $1
     `, [decoded.userId]);
@@ -66,29 +66,13 @@ async function authenticate(req, res, next) {
     
     const user = userResult.rows[0];
     
-    // Check user status
-    if (user.status === 'suspended') {
-      logger.warn('Suspended user attempted access', { 
+    // Check user status (simplified - just check if active)
+    if (!user.is_active) {
+      logger.warn('Inactive user attempted access', { 
         userId: user.id, 
         ip: req.ip 
       });
-      throw createError('Account is suspended', 403);
-    }
-    
-    if (user.status === 'banned') {
-      logger.warn('Banned user attempted access', { 
-        userId: user.id, 
-        ip: req.ip 
-      });
-      throw createError('Account is banned', 403);
-    }
-    
-    if (user.status === 'deleted') {
-      logger.warn('Deleted user attempted access', { 
-        userId: user.id, 
-        ip: req.ip 
-      });
-      throw createError('Account no longer exists', 403);
+      throw createError('Account is not active', 403);
     }
     
     // Check if email is verified for sensitive operations
@@ -101,8 +85,8 @@ async function authenticate(req, res, next) {
       id: user.id,
       email: user.email,
       username: user.username,
-      role: user.role,
-      status: user.status,
+      role: decoded.role || 'user',
+      status: user.is_active ? 'active' : 'inactive',
       isVerified: user.is_verified,
       lastLoginAt: user.last_login_at
     };
@@ -110,7 +94,7 @@ async function authenticate(req, res, next) {
     // Log successful authentication for audit trail
     logger.debug('User authenticated successfully', {
       userId: user.id,
-      role: user.role,
+      role: decoded.role || 'user',
       path: req.path,
       method: req.method,
       ip: req.ip

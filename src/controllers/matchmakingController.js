@@ -244,6 +244,78 @@ async function getMatchmakingStats(req, res) {
 }
 
 /**
+ * Quickplay - instantly join casual matchmaking queue
+ */
+async function quickplay(req, res) {
+    const userId = req.user.id;
+
+    try {
+        // Use default quickplay preferences: casual, standard mode, allow spectators
+        const queueEntry = await MatchmakingService.joinQueue(userId, {
+            ranked: false,
+            gameMode: 'standard',
+            allowSpectators: true
+        });
+
+        logger.info('Player started quickplay', {
+            userId,
+            estimatedWaitTime: MatchmakingService.estimateWaitTime(queueEntry)
+        });
+
+        res.json({
+            success: true,
+            message: 'Searching for a quick match...',
+            queueEntry: {
+                joinedAt: queueEntry.joinedAt,
+                preferences: queueEntry.preferences,
+                estimatedWaitTime: MatchmakingService.estimateWaitTime(queueEntry)
+            }
+        });
+
+    } catch (error) {
+        logger.error('Failed to start quickplay', {
+            userId,
+            error: error.message
+        });
+        
+        if (error.message.includes('already in')) {
+            throw createError('Already searching for a match', 409);
+        }
+        
+        throw createError('Failed to start quickplay', 500);
+    }
+}
+
+/**
+ * Guest quickplay - create or join a guest room for anonymous play
+ */
+async function guestQuickplay(req, res) {
+    try {
+        // Generate a room ID for guest play
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let roomId = '';
+        for (let i = 0; i < 6; i++) {
+            roomId += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        
+        // Simple response without complex logging
+        res.json({
+            success: true,
+            message: 'Guest room created! Joining game...',
+            roomId: roomId,
+            isGuest: true
+        });
+        
+    } catch (error) {
+        console.error('Guest quickplay error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to create guest room'
+        });
+    }
+}
+
+/**
  * Cancel search and suggest alternatives
  */
 async function cancelSearch(req, res) {
@@ -338,5 +410,7 @@ module.exports = {
     getGlobalQueueStatus,
     forceMatch,
     getMatchmakingStats,
+    quickplay,
+    guestQuickplay,
     cancelSearch
 };

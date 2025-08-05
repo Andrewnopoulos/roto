@@ -19,26 +19,20 @@ const router = express.Router();
 // Import middleware and utilities
 const { authRateLimiter, validateRequest, validationRules } = require('../middleware/security');
 const { asyncHandler } = require('../middleware/errorHandler');
+const authMiddleware = require('../middleware/memoryAuth');
 const logger = require('../utils/logger');
 
-// Import controllers (to be implemented)
-const authController = require('../controllers/authController');
+// Import memory-based auth controller (works without database)
+const authController = require('../controllers/memoryAuthController');
 
 /**
  * POST /api/auth/register
  * Register a new user account
  * 
- * Body: { email, username, password, confirmPassword }
- * Response: { success, message, user }
+ * Body: { email, username, password }
+ * Response: { success, message, user, token }
  */
 router.post('/register',
-  authRateLimiter,
-  [
-    validationRules.email,
-    validationRules.username,
-    validationRules.password,
-    validateRequest
-  ],
   asyncHandler(authController.register)
 );
 
@@ -47,97 +41,34 @@ router.post('/register',
  * Authenticate user credentials
  * 
  * Body: { email, password }
- * Response: { success, token, refreshToken, user }
+ * Response: { success, token, user }
  */
 router.post('/login',
-  authRateLimiter,
-  [
-    validationRules.email,
-    validateRequest
-  ],
   asyncHandler(authController.login)
 );
 
 /**
  * POST /api/auth/logout
- * Invalidate user session and tokens
+ * Logout user (JWT is stateless, so this is mainly for logging)
  * 
  * Headers: { Authorization: "Bearer <token>" }
  * Response: { success, message }
  */
 router.post('/logout',
+  authMiddleware.authenticate,
   asyncHandler(authController.logout)
 );
 
 /**
- * POST /api/auth/refresh
- * Refresh access token using refresh token
+ * GET /api/auth/profile
+ * Get current user profile
  * 
- * Body: { refreshToken }
- * Response: { success, token, refreshToken }
+ * Headers: { Authorization: "Bearer <token>" }
+ * Response: { success, user }
  */
-router.post('/refresh',
-  authRateLimiter,
-  asyncHandler(authController.refreshToken)
-);
-
-/**
- * POST /api/auth/forgot-password
- * Initiate password reset process
- * 
- * Body: { email }
- * Response: { success, message }
- */
-router.post('/forgot-password',
-  authRateLimiter,
-  [
-    validationRules.email,
-    validateRequest
-  ],
-  asyncHandler(authController.forgotPassword)
-);
-
-/**
- * POST /api/auth/reset-password
- * Reset password using reset token
- * 
- * Body: { token, password, confirmPassword }
- * Response: { success, message }
- */
-router.post('/reset-password',
-  authRateLimiter,
-  [
-    validationRules.password,
-    validateRequest
-  ],
-  asyncHandler(authController.resetPassword)
-);
-
-/**
- * GET /api/auth/verify-email/:token
- * Verify email address using verification token
- * 
- * Params: { token }
- * Response: { success, message }
- */
-router.get('/verify-email/:token',
-  asyncHandler(authController.verifyEmail)
-);
-
-/**
- * POST /api/auth/resend-verification
- * Resend email verification
- * 
- * Body: { email }
- * Response: { success, message }
- */
-router.post('/resend-verification',
-  authRateLimiter,
-  [
-    validationRules.email,
-    validateRequest
-  ],
-  asyncHandler(authController.resendVerification)
+router.get('/profile',
+  authMiddleware.authenticate,
+  asyncHandler(authController.getProfile)
 );
 
 module.exports = router;
